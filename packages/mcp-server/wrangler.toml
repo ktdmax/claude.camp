@@ -1,0 +1,15 @@
+name = "claudecamp-mcp"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Secrets (set via: wrangler secret put SECRET_NAME)
+# SUPABASE_URL
+# SUPABASE_SERVICE_KEY
+# UPSTASH_REDIS_REST_URL
+# UPSTASH_REDIS_REST_TOKEN
+# GITHUB_CLIENT_ID
+# GITHUB_CLIENT_SECRET
+# JWT_PRIVATE_KEY

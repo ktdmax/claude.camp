@@ -1,0 +1,36 @@
+@import "tailwindcss";
+@import "@claudecamp/campfire/src/animations.css";
+
+:root {
+  --bg-deep: #0D0D1A;
+  --bg-surface: #1A1A2E;
+  --text-primary: #F5F0E8;
+  --text-muted: #8A8A9A;
+  --accent: #E8572A;
+  --accent-gold: #FFD700;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg-deep);
+}
+
+/* Pixel-perfect rendering for SVGs */
+svg {
+  shape-rendering: crispEdges;
+  image-rendering: pixelated;
+}

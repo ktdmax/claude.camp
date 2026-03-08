@@ -1,0 +1,48 @@
+/* Cici animation states */
+
+.cici.idle {
+  animation: idle-bob 3s ease-in-out infinite;
+}
+
+@keyframes idle-bob {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-2px); }
+}
+
+.cici.working {
+  animation: walk 0.6s steps(2) infinite;
+}
+
+@keyframes walk {
+  0% { transform: translateX(0px); }
+  100% { transform: translateX(4px); }
+}
+
+.cici.celebrating {
+  animation: celebrate 0.4s ease-out 3;
+}
+
+@keyframes celebrate {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+  100% { transform: translateY(0px); }
+}
+
+.cici.thinking {
+  animation: think-blink 2s ease-in-out infinite;
+}
+
+@keyframes think-blink {
+  0%, 90%, 100% { opacity: 1; }
+  95% { opacity: 0.3; }
+}
+
+.cici.new {
+  animation: wave 0.5s ease-in-out 4;
+}
+
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}

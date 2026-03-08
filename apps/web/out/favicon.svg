@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="4" fill="#0D0D1A"/>
+  <!-- Flame tip -->
+  <rect x="16" y="2" width="3" height="3" fill="#FF7B4A"/>
+  <!-- Head top -->
+  <rect x="10" y="5" width="3" height="3" fill="#E8572A"/>
+  <rect x="13" y="5" width="3" height="3" fill="#E8572A"/>
+  <rect x="16" y="5" width="3" height="3" fill="#E8572A"/>
+  <rect x="19" y="5" width="3" height="3" fill="#E8572A"/>
+  <!-- Eyes row — wider head -->
+  <rect x="7" y="8" width="3" height="3" fill="#E8572A"/>
+  <rect x="10" y="8" width="3" height="3" fill="#1A1A2E"/>
+  <rect x="13" y="8" width="3" height="3" fill="#E8572A"/>
+  <rect x="16" y="8" width="3" height="3" fill="#1A1A2E"/>
+  <rect x="19" y="8" width="3" height="3" fill="#E8572A"/>
+  <rect x="22" y="8" width="3" height="3" fill="#E8572A"/>
+  <!-- Chin — narrow = neck -->
+  <rect x="10" y="11" width="3" height="3" fill="#E8572A"/>
+  <rect x="13" y="11" width="3" height="3" fill="#E8572A"/>
+  <rect x="16" y="11" width="3" height="3" fill="#E8572A"/>
+  <rect x="19" y="11" width="3" height="3" fill="#E8572A"/>
+  <!-- Neck -->
+  <rect x="13" y="14" width="3" height="3" fill="#E8572A"/>
+  <rect x="16" y="14" width="3" height="3" fill="#E8572A"/>
+  <!-- Body -->
+  <rect x="10" y="17" width="3" height="3" fill="#E8572A"/>
+  <rect x="13" y="17" width="3" height="3" fill="#E8572A"/>
+  <rect x="16" y="17" width="3" height="3" fill="#FF7B4A"/>
+  <rect x="19" y="17" width="3" height="3" fill="#E8572A"/>
+  <!-- Torso -->
+  <rect x="10" y="20" width="3" height="3" fill="#E8572A"/>
+  <rect x="13" y="20" width="3" height="3" fill="#E8572A"/>
+  <rect x="16" y="20" width="3" height="3" fill="#E8572A"/>
+  <rect x="19" y="20" width="3" height="3" fill="#E8572A"/>
+  <!-- Legs -->
+  <rect x="10" y="23" width="3" height="3" fill="#E8572A"/>
+  <rect x="19" y="23" width="3" height="3" fill="#E8572A"/>
+  <!-- Feet -->
+  <rect x="7" y="26" width="3" height="3" fill="#E8572A"/>
+  <rect x="22" y="26" width="3" height="3" fill="#E8572A"/>
+</svg>

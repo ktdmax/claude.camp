@@ -15,7 +15,7 @@ function rng(seed: number) {
 }
 
 function buildIsland(): Array<{ x: number; y: number; v: number }> {
-  const rand = rng(42_Claude_Island)
+  const rand = rng(ISLAND_SEED)
   const grid: number[][] = Array.from({ length: H }, () => Array(W).fill(0))
 
   // Define Cici shape as signed distance from center of each body part
@@ -141,7 +141,7 @@ function buildIsland(): Array<{ x: number; y: number; v: number }> {
 }
 
 // Use a numeric seed (can't use string in math)
-const _42_Claude_Island = 424349
+const ISLAND_SEED = 424349
 
 const DOT: Record<string, [number, number]> = {
   'Austria': [48, 46], 'AT': [48, 46],

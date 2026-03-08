@@ -110,7 +110,7 @@ export function WorldMap() {
         <span className="wm-n">{total} {total === 1 ? 'Cici' : 'Cicis'}</span>
       </div>
       <div className="wm-wrap">
-        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="wm-svg">
+        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="wm-svg" shapeRendering="crispEdges">
           <defs>
             <filter id="glow">
               <feGaussianBlur stdDeviation="3" result="b" />
@@ -122,10 +122,10 @@ export function WorldMap() {
           {cells.map(({ x, y, v }) => (
             <rect
               key={`${x},${y}`}
-              x={x * PX}
-              y={y * PX}
-              width={PX}
-              height={PX}
+              x={x * PX - 0.5}
+              y={y * PX - 0.5}
+              width={PX + 1}
+              height={PX + 1}
               fill={v === 2 ? '#1E1E38' : '#161630'}
             />
           ))}

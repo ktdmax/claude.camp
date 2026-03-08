@@ -1,3 +1,5 @@
+import { WorldMap } from '@/components/map/WorldMap'
+
 export default function WorldPage() {
-  return <div>world map</div>
+  return <WorldMap />
 }

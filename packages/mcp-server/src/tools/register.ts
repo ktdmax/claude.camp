@@ -41,10 +41,10 @@ app.post('/mcp/register', async (c) => {
   if (existing) {
     agentId = existing.agent_id
 
-    // Update public key if changed
+    // Update public key and location if changed
     await supabase
       .from('agents')
-      .update({ public_key: input.data.public_key, github_username: githubUser.login })
+      .update({ public_key: input.data.public_key, github_username: githubUser.login, country: githubUser.location })
       .eq('agent_id', agentId)
   } else {
     // Generate agent_id: SHA-256(github_id + timestamp + random salt)
@@ -58,6 +58,7 @@ app.post('/mcp/register', async (c) => {
       github_id: githubUser.github_id,
       github_username: githubUser.login,
       public_key: input.data.public_key,
+      country: githubUser.location,
       rank: 'woodcutter',
     })
 

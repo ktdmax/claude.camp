@@ -9,16 +9,18 @@
     "start": "next start"
   },
   "dependencies": {
+    "@claudecamp/campfire": "workspace:*",
+    "@supabase/supabase-js": "^2.49.0",
+    "leaflet": "^1.9.4",
     "next": "^15.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@supabase/supabase-js": "^2.49.0",
-    "@claudecamp/campfire": "workspace:*",
     "tailwindcss": "^4.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
+    "@types/leaflet": "^1.9.21",
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
   }
 }

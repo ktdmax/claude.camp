@@ -8,26 +8,60 @@ const ROWS = 50
 const PX = 12
 
 const BG = '#0D0D1A'
-const DOT_COLOR = '#E8572A'
-const ACTIVE = '#2A2D4A'
 
-// Monkey Island palette — deep navy blues, night feel
-// -2=outer shelf, -1=inner shelf, 1=coast, 2=land, 3=highland
-const PALETTE: Record<number, string[]> = {
-  [-2]: ['#0E0E22', '#0F0F24', '#0E0F20', '#0F0E23'],
-  [-1]: ['#101028', '#11112A', '#10102C', '#12112B'],
-  1:    ['#14142E', '#151530', '#161632', '#141530'],
-  2:    ['#1A1A3C', '#1C1C3E', '#1B1B3A', '#1D1C40'],
-  3:    ['#222248', '#24244A', '#23234C', '#212246'],
+// Heightmap noise — deterministic, multi-octave for terrain depth
+// Returns 0.0 to 1.0
+function noise2d(x: number, y: number, seed: number): number {
+  // Hash-based noise
+  const h = ((x * 374761 + y * 668265 + seed * 1013) >>> 0)
+  return (h % 10000) / 10000
 }
 
-// Deterministic pixel color from palette variants — gives textured look
+function terrainHeight(x: number, y: number): number {
+  // Large rolling hills
+  const n1 = noise2d(Math.floor(x / 6), Math.floor(y / 6), 1)
+  // Medium texture
+  const n2 = noise2d(Math.floor(x / 3), Math.floor(y / 3), 2)
+  // Fine grain per pixel
+  const n3 = noise2d(x, y, 3)
+  // Combine: large dominates, fine adds grain
+  return n1 * 0.45 + n2 * 0.35 + n3 * 0.2
+}
+
+// Generate terrain color based on base value + heightmap noise
+// Creates deep valleys (near-black) and bright ridges (purple-blue)
 function pixelFill(x: number, y: number, value: number): string {
-  const variants = PALETTE[value]
-  if (!variants) return '#1E1E40'
-  // Simple hash for deterministic noise
-  const hash = ((x * 374761 + y * 668265 + x * y * 7) >>> 0) % variants.length
-  return variants[hash]!
+  const h = terrainHeight(x, y)
+
+  // Base brightness per terrain type
+  // shelf=-2/-1 stays simple, land gets the heightmap treatment
+  if (value === -2) {
+    const b = 10 + Math.round(h * 6)
+    return `rgb(${b},${b},${b + 18})`
+  }
+  if (value === -1) {
+    const b = 13 + Math.round(h * 8)
+    return `rgb(${b},${b},${b + 22})`
+  }
+
+  // Coast (1): dark with slight warm tint — beach/rock feel
+  if (value === 1) {
+    const b = 14 + Math.round(h * 14)
+    return `rgb(${b + 2},${b},${b + 18})`
+  }
+
+  // Land (2): wide range — dark valleys to medium
+  if (value === 2) {
+    const b = 16 + Math.round(h * 24)
+    return `rgb(${b},${b},${b + 26})`
+  }
+
+  // Highland (3): widest range — deep dark to bright ridges
+  // This is where the Monkey Island magic happens
+  const b = 12 + Math.round(h * 40)
+  // Add slight purple/blue shift on bright pixels
+  const blue = b + 30 + Math.round(h * 12)
+  return `rgb(${b},${b + 1},${Math.min(100, blue)})`
 }
 
 // Base 40×25 Cici silhouette — upscaled 2x to 80×50 programmatically

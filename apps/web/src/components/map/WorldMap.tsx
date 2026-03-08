@@ -1,283 +1,249 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 
-// Grid: 20 columns × 10 rows
-// Country → [col, row] (0-indexed)
-const COUNTRY_CELL: Record<string, [number, number]> = {
-  'United States': [4, 3], 'US': [4, 3], 'USA': [4, 3],
-  'Canada': [4, 2], 'CA': [4, 2],
-  'Mexico': [3, 4], 'MX': [3, 4],
-  'Brazil': [6, 6], 'BR': [6, 6],
-  'Argentina': [5, 7], 'AR': [5, 7],
-  'Colombia': [5, 5], 'CO': [5, 5],
-  'Chile': [5, 8], 'CL': [5, 8],
-  'Peru': [4, 6], 'PE': [4, 6],
-  'United Kingdom': [10, 2], 'UK': [10, 2], 'GB': [10, 2],
-  'Ireland': [9, 2], 'IE': [9, 2],
-  'France': [10, 3], 'FR': [10, 3],
-  'Spain': [10, 3], 'ES': [10, 3],
-  'Portugal': [9, 3], 'PT': [9, 3],
-  'Germany': [11, 2], 'DE': [11, 2],
-  'Austria': [11, 3], 'AT': [11, 3],
-  'Switzerland': [10, 3], 'CH': [10, 3],
-  'Netherlands': [10, 2], 'NL': [10, 2],
-  'Belgium': [10, 3], 'BE': [10, 3],
-  'Italy': [11, 3], 'IT': [11, 3],
-  'Poland': [11, 2], 'PL': [11, 2],
-  'Czech Republic': [11, 3], 'CZ': [11, 3], 'Czechia': [11, 3],
-  'Romania': [12, 3], 'RO': [12, 3],
-  'Hungary': [11, 3], 'HU': [11, 3],
-  'Croatia': [11, 3], 'HR': [11, 3],
-  'Sweden': [11, 1], 'SE': [11, 1],
-  'Norway': [10, 1], 'NO': [10, 1],
-  'Finland': [11, 1], 'FI': [11, 1],
-  'Denmark': [10, 2], 'DK': [10, 2],
-  'Estonia': [11, 2], 'EE': [11, 2],
-  'Latvia': [11, 2], 'LV': [11, 2],
-  'Lithuania': [11, 2], 'LT': [11, 2],
-  'Ukraine': [12, 2], 'UA': [12, 2],
-  'Russia': [14, 2], 'RU': [14, 2],
-  'Turkey': [12, 3], 'TR': [12, 3],
-  'Israel': [12, 4], 'IL': [12, 4],
-  'Egypt': [12, 4], 'EG': [12, 4],
-  'Nigeria': [11, 5], 'NG': [11, 5],
-  'Kenya': [12, 5], 'KE': [12, 5],
-  'South Africa': [12, 7], 'ZA': [12, 7],
-  'Morocco': [10, 4], 'MA': [10, 4],
-  'UAE': [13, 4], 'AE': [13, 4],
-  'Pakistan': [14, 4], 'PK': [14, 4],
-  'India': [15, 4], 'IN': [15, 4],
-  'Bangladesh': [15, 4], 'BD': [15, 4],
-  'China': [16, 3], 'CN': [16, 3],
-  'Japan': [17, 3], 'JP': [17, 3],
-  'South Korea': [17, 3], 'KR': [17, 3],
-  'Taiwan': [17, 4], 'TW': [17, 4],
-  'Thailand': [16, 4], 'TH': [16, 4],
-  'Vietnam': [16, 4], 'VN': [16, 4],
-  'Malaysia': [16, 5], 'MY': [16, 5],
-  'Singapore': [16, 5], 'SG': [16, 5],
-  'Indonesia': [17, 5], 'ID': [17, 5],
-  'Philippines': [17, 4], 'PH': [17, 4],
-  'Australia': [18, 7], 'AU': [18, 7],
-  'New Zealand': [19, 8], 'NZ': [19, 8],
+// 100 columns × 50 rows
+// x = (lon+180)/3.6, y = (90-lat)/3.6
+const W = 100, H = 50, PX = 10
+
+// Land defined as horizontal spans: [row, colStart, colEnd]
+const SPANS: Array<[number, number, number]> = [
+  // Greenland
+  [2,33,37],[3,32,38],[4,31,39],[5,31,38],[6,32,38],[7,33,37],[8,34,36],
+  // Iceland
+  [7,45,46],
+  // Alaska
+  [6,3,8],[7,2,10],[8,3,10],[9,5,8],
+  // Canada (arctic archipelago)
+  [4,14,16],[4,19,22],[4,26,30],
+  [5,12,16],[5,18,23],[5,25,31],
+  [6,11,17],[6,19,24],[6,25,32],
+  // Canada mainland
+  [7,10,31],[8,10,33],[9,11,33],[10,12,33],[11,14,33],
+  // USA
+  [12,16,32],[13,17,32],[14,17,31],[15,18,31],[16,18,30],[17,18,29],
+  // Florida
+  [18,27,29],
+  // Mexico + Gulf coast
+  [18,18,26],[19,19,24],[20,19,23],[21,20,23],[22,21,23],
+  // Central America
+  [23,22,24],[24,23,25],
+  // Cuba + Caribbean
+  [20,26,28],[21,27,28],
+  // South America
+  [23,26,31],[24,25,37],[25,25,39],[26,25,40],[27,26,40],[28,27,40],
+  [29,27,40],[30,28,39],[31,29,39],[32,29,38],[33,30,38],[34,30,37],
+  [35,30,36],[36,31,35],[37,31,34],[38,31,34],[39,32,33],
+  // UK + Ireland
+  [9,49,50],[10,48,50],[11,49,50],
+  // Scandinavia
+  [5,53,54],[6,52,55],[7,52,56],[8,52,56],[9,52,56],[10,53,55],
+  // Western Europe (France, Benelux, Germany, Austria, Czech)
+  [11,50,57],[12,50,58],[13,49,57],
+  // Iberian Peninsula
+  [14,48,51],[15,48,50],
+  // Italy
+  [14,53,54],[15,53,54],[16,54,54],
+  // Balkans + Greece
+  [14,55,57],[15,56,57],[16,56,57],
+  // Eastern Europe
+  [10,56,61],[11,57,63],[12,58,65],
+  // Russia
+  [3,80,88],[3,91,96],
+  [4,60,62],[4,72,78],[4,80,97],
+  [5,56,58],[5,60,98],
+  [6,56,99],[7,56,99],[8,56,98],[9,57,97],[10,58,96],[11,60,93],[12,62,90],
+  // Turkey
+  [13,57,61],[14,58,61],
+  // Middle East + Arabia
+  [15,58,67],[16,59,67],[17,59,66],[18,60,66],[19,61,65],[20,62,65],
+  // North Africa
+  [15,48,58],[16,47,59],[17,47,60],[18,47,60],[19,47,60],
+  // West Africa
+  [20,46,57],[21,46,56],[22,47,56],[23,48,56],
+  // Central + East Africa
+  [24,50,61],[25,50,62],[26,51,62],[27,52,62],[28,53,61],
+  [29,54,61],[30,54,61],
+  // Southern Africa
+  [31,55,60],[32,55,60],[33,55,59],[34,55,59],[35,56,58],
+  // Madagascar
+  [30,63,63],[31,63,64],[32,63,64],[33,63,63],
+  // Central Asia
+  [12,62,73],[13,60,75],
+  // Pakistan + India
+  [14,68,71],[15,68,73],[16,69,75],[17,69,76],[18,70,77],
+  [19,70,77],[20,71,76],[21,72,76],[22,72,75],[23,73,75],[24,74,75],
+  // Sri Lanka
+  [25,75,76],
+  // China + Mongolia
+  [13,75,87],[14,73,88],[15,75,88],[16,76,87],[17,77,85],[18,78,83],
+  // Korea
+  [14,86,87],[15,86,87],
+  // Japan
+  [12,89,90],[13,89,90],[14,89,90],[15,89,90],[16,89,89],
+  // SE Asia (Myanmar, Thailand, Vietnam, Laos, Cambodia)
+  [19,77,81],[20,77,82],[21,78,82],[22,78,82],[23,79,81],
+  // Malay Peninsula
+  [24,79,80],[25,80,80],
+  // Philippines
+  [21,84,85],[22,84,85],[23,84,85],
+  // Indonesia
+  [25,81,83],[26,81,85],[27,82,88],[28,83,91],[29,87,93],
+  // Australia
+  [31,87,94],[32,86,95],[33,86,95],[34,86,95],[35,87,94],[36,88,94],[37,89,93],[38,90,92],
+  // Papua New Guinea
+  [29,93,96],[30,93,95],
+  // New Zealand
+  [37,97,98],[38,97,98],[39,97,97],
+  // Taiwan
+  [16,88,88],
+]
+
+// Country → grid cell [col, row]
+// x = (lon+180)/3.6, y = (90-lat)/3.6
+const DOT: Record<string, [number, number]> = {
+  'Austria': [54,12], 'AT': [54,12],
+  'Germany': [53,11], 'DE': [53,11],
+  'Switzerland': [52,12], 'CH': [52,12],
+  'United States': [24,14], 'US': [24,14], 'USA': [24,14],
+  'United Kingdom': [50,11], 'UK': [50,11], 'GB': [50,11],
+  'France': [51,12], 'FR': [51,12],
+  'Netherlands': [52,11], 'NL': [52,11],
+  'Japan': [89,14], 'JP': [89,14],
+  'India': [72,19], 'IN': [72,19],
+  'Brazil': [35,31], 'BR': [35,31],
+  'Canada': [21,10], 'CA': [21,10],
+  'Australia': [91,34], 'AU': [91,34],
+  'Sweden': [54,7], 'SE': [54,7],
+  'Norway': [53,7], 'NO': [53,7],
+  'Finland': [55,7], 'FI': [55,7],
+  'Denmark': [53,10], 'DK': [53,10],
+  'Poland': [55,11], 'PL': [55,11],
+  'Spain': [49,14], 'ES': [49,14],
+  'Italy': [54,14], 'IT': [54,14],
+  'Portugal': [48,14], 'PT': [48,14],
+  'Ireland': [48,10], 'IE': [48,10],
+  'South Korea': [86,15], 'KR': [86,15],
+  'Singapore': [79,25], 'SG': [79,25],
+  'Israel': [60,15], 'IL': [60,15],
+  'China': [82,15], 'CN': [82,15],
+  'Mexico': [22,20], 'MX': [22,20],
+  'Argentina': [34,36], 'AR': [34,36],
+  'Colombia': [29,24], 'CO': [29,24],
+  'Romania': [57,13], 'RO': [57,13],
+  'Ukraine': [59,11], 'UA': [59,11],
+  'Turkey': [59,13], 'TR': [59,13],
+  'New Zealand': [97,38], 'NZ': [97,38],
+  'South Africa': [55,34], 'ZA': [55,34],
+  'Nigeria': [51,22], 'NG': [51,22],
+  'Kenya': [60,25], 'KE': [60,25],
+  'Indonesia': [85,27], 'ID': [85,27],
+  'Philippines': [84,22], 'PH': [84,22],
+  'Thailand': [78,21], 'TH': [78,21],
+  'Vietnam': [80,21], 'VN': [80,21],
+  'Taiwan': [88,16], 'TW': [88,16],
+  'Russia': [75,8], 'RU': [75,8],
+  'Egypt': [59,16], 'EG': [59,16],
+  'Pakistan': [69,17], 'PK': [69,17],
+  'UAE': [65,17], 'AE': [65,17],
+  'Chile': [31,37], 'CL': [31,37],
+  'Peru': [28,30], 'PE': [28,30],
+  'Morocco': [49,16], 'MA': [49,16],
 }
 
-// Simplified world landmass SVG paths (equirectangular, viewBox 0 0 1000 500)
-const CONTINENTS = [
-  // North America
-  'M 55,55 L 80,50 100,48 130,52 160,60 185,55 200,65 225,60 240,75 255,90 240,105 220,110 200,130 195,145 210,150 225,155 230,165 228,175 215,180 195,200 185,210 180,220 178,230 170,225 160,210 145,195 130,175 120,160 100,145 85,130 75,115 60,100 50,85 48,70 Z',
-  // Greenland
-  'M 280,35 L 310,30 330,35 340,50 335,65 320,75 300,78 285,70 275,55 Z',
-  // South America
-  'M 200,240 L 220,235 240,240 260,235 275,240 285,250 290,265 295,280 300,300 295,320 290,335 280,350 270,365 260,375 250,380 240,390 235,400 230,395 225,380 230,365 225,345 220,330 210,315 200,295 195,275 190,260 195,248 Z',
-  // Europe
-  'M 460,55 L 475,50 490,48 500,52 510,45 520,48 530,55 540,58 535,65 530,70 540,75 535,82 540,88 548,92 555,95 558,100 555,105 560,110 565,115 558,120 548,118 540,115 530,112 520,105 510,100 500,95 490,85 480,78 470,72 465,65 Z',
-  // Africa
-  'M 465,130 L 490,125 510,120 530,122 555,125 568,130 575,140 578,150 580,165 575,180 578,195 582,210 585,225 590,240 595,260 598,280 600,300 595,315 585,330 575,340 565,345 555,340 545,335 535,340 525,330 515,310 510,295 500,275 495,260 492,245 488,230 485,215 480,200 478,185 475,170 470,155 465,140 Z',
-  // Asia (mainland)
-  'M 540,45 L 555,40 570,38 590,40 610,35 630,32 660,30 690,28 720,30 750,32 780,35 800,40 820,42 840,48 860,52 870,58 860,60 840,55 820,58 810,55 820,65 830,72 840,80 835,85 815,88 800,82 785,88 770,95 760,100 750,110 740,120 730,115 720,105 710,100 700,95 690,100 680,110 670,115 660,120 650,115 640,110 630,108 620,105 615,110 610,115 600,112 590,108 580,102 570,95 565,88 560,80 555,72 550,65 548,58 Z',
-  // India
-  'M 640,120 L 660,118 680,122 690,130 695,142 700,155 698,170 690,182 680,190 668,195 658,190 648,178 640,165 635,150 630,140 632,130 Z',
-  // Southeast Asia peninsula
-  'M 720,118 L 730,120 738,128 742,140 740,155 735,165 730,170 725,160 718,148 715,135 718,125 Z',
-  // Japan
-  'M 848,70 L 855,65 860,70 862,80 858,90 855,98 850,102 845,95 842,85 843,78 Z',
-  // Indonesia
-  'M 720,180 L 740,178 755,180 770,178 788,180 798,182 810,185 815,190 810,195 795,192 780,195 765,192 750,195 735,192 725,190 720,185 Z',
-  // Australia
-  'M 810,275 L 835,268 860,265 880,268 895,275 900,290 895,305 888,318 878,325 865,330 848,328 835,322 825,315 818,305 812,295 810,285 Z',
-  // New Zealand
-  'M 920,325 L 928,320 932,328 930,340 925,348 920,340 Z',
-  // UK
-  'M 478,58 L 485,55 490,58 492,65 495,72 492,78 488,82 484,78 480,72 478,65 Z',
-  // Madagascar
-  'M 600,300 L 608,295 612,302 610,315 605,322 600,318 598,308 Z',
-]
+function buildLand(): Set<string> {
+  const s = new Set<string>()
+  for (const [y, x1, x2] of SPANS)
+    for (let x = x1; x <= x2; x++) s.add(`${x},${y}`)
+  return s
+}
 
 export function WorldMap() {
   const [countries, setCountries] = useState<Record<string, number>>({})
   const [total, setTotal] = useState(0)
   const [hovered, setHovered] = useState<string | null>(null)
+  const land = useMemo(buildLand, [])
 
   useEffect(() => {
-    async function fetchCountries() {
-      try {
-        const res = await fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
-        const data = await res.json() as { countries: Record<string, number> }
-        setCountries(data.countries)
-        setTotal(Object.values(data.countries).reduce((a, b) => a + b, 0))
-      } catch { /* noop */ }
-    }
-    fetchCountries()
+    fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
+      .then(r => r.json())
+      .then((d: { countries: Record<string, number> }) => {
+        setCountries(d.countries)
+        setTotal(Object.values(d.countries).reduce((a, b) => a + b, 0))
+      })
+      .catch(() => {})
   }, [])
 
-  // Aggregate dots per grid cell (multiple countries can share a cell)
-  const cellDots: Record<string, { count: number; names: string[] }> = {}
+  // Aggregate dots per cell
+  const cells: Record<string, { n: number; names: string[] }> = {}
   for (const [country, count] of Object.entries(countries)) {
-    const cell = COUNTRY_CELL[country]
-    if (!cell) continue
-    const key = `${cell[0]},${cell[1]}`
-    if (!cellDots[key]) cellDots[key] = { count: 0, names: [] }
-    cellDots[key].count += count
-    cellDots[key].names.push(`${country} · ${count}`)
+    const c = DOT[country]
+    if (!c) continue
+    const k = `${c[0]},${c[1]}`
+    if (!cells[k]) cells[k] = { n: 0, names: [] }
+    cells[k].n += count
+    cells[k].names.push(`${country} · ${count}`)
   }
 
   return (
-    <div className="wm-page">
-      <div className="wm-header">
-        <a href="/" className="wm-back">← fire</a>
-        <span className="wm-title">world</span>
-        <span className="wm-count">{total} {total === 1 ? 'Cici' : 'Cicis'}</span>
+    <div className="wm">
+      <div className="wm-bar">
+        <a href="/">← fire</a>
+        <span>world</span>
+        <span className="wm-n">{total} {total === 1 ? 'Cici' : 'Cicis'}</span>
       </div>
-
-      <div className="wm-container">
-        {/* SVG world map background */}
-        <svg className="wm-svg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <filter id="glow">
-              <feGaussianBlur stdDeviation="6" result="b" />
-              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-          </defs>
-          {CONTINENTS.map((d, i) => (
-            <path key={i} d={d} fill="#1C1C32" stroke="#2A2A48" strokeWidth="1" />
-          ))}
-        </svg>
-
-        {/* Grid overlay with dots */}
-        <div className="wm-grid">
-          {Object.entries(cellDots).map(([key, dot]) => {
-            const [col, row] = key.split(',').map(Number)
-            const isHov = hovered === key
+      <div className="wm-wrap">
+        <svg viewBox={`0 0 ${W * PX} ${H * PX}`} className="wm-svg">
+          {/* Land cells */}
+          {Array.from(land).map(k => {
+            const [x, y] = k.split(',').map(Number)
+            return <rect key={k} x={x! * PX} y={y! * PX} width={PX} height={PX} fill="#1C1C32" />
+          })}
+          {/* Dots */}
+          {Object.entries(cells).map(([k, dot]) => {
+            const [x, y] = k.split(',').map(Number)
+            const cx = x! * PX + PX / 2
+            const cy = y! * PX + PX / 2
+            const isH = hovered === k
             return (
-              <div
-                key={key}
-                className="wm-dot-cell"
-                style={{ gridColumn: col! + 1, gridRow: row! + 1 }}
-                onMouseEnter={() => setHovered(key)}
+              <g key={k}
+                onMouseEnter={() => setHovered(k)}
                 onMouseLeave={() => setHovered(null)}
+                style={{ cursor: 'default' }}
               >
-                <div className="wm-pulse" />
-                <div className="wm-dot">
-                  {dot.count > 1 && <span className="wm-dot-count">{dot.count}</span>}
-                </div>
-                {isHov && (
-                  <div className="wm-tooltip">
-                    {dot.names.map((n, i) => <div key={i}>{n}</div>)}
-                  </div>
+                <circle cx={cx} cy={cy} r={16} fill="#E8572A" opacity={0.1} className="wm-p1" />
+                <circle cx={cx} cy={cy} r={10} fill="#E8572A" opacity={0.2} className="wm-p2" />
+                <circle cx={cx} cy={cy} r={5} fill="#E8572A" />
+                <circle cx={cx} cy={cy} r={7} fill="none" stroke="#E8572A" strokeWidth={0.5} opacity={0.4} />
+                {dot.n > 1 && (
+                  <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="central" fill="#0D0D1A" fontSize="6" fontWeight="bold" fontFamily="monospace">{dot.n}</text>
                 )}
-              </div>
+                {isH && (
+                  <g>
+                    <rect x={cx - 35} y={cy - 20} width={70} height={14 * dot.names.length + 4} fill="#0D0D1A" stroke="#E8572A" strokeWidth="0.8" rx="1" />
+                    {dot.names.map((n, i) => (
+                      <text key={i} x={cx} y={cy - 12 + i * 14} textAnchor="middle" fill="#F5F0E8" fontSize="7" fontFamily="monospace">{n}</text>
+                    ))}
+                  </g>
+                )}
+              </g>
             )
           })}
-        </div>
+        </svg>
       </div>
-
       <style>{`
-        .wm-page {
-          height: 100vh;
-          display: flex;
-          flex-direction: column;
-          background: #0D0D1A;
-          overflow: hidden;
-        }
-        .wm-header {
-          display: flex;
-          align-items: center;
-          gap: 1.5rem;
-          padding: 0.75rem 1.5rem;
-          border-bottom: 1px solid #1A1A2E;
-          font-size: 0.8rem;
-          flex-shrink: 0;
-        }
-        .wm-back { color: #8A8A9A; text-decoration: none; }
-        .wm-back:hover { color: #F5F0E8; }
-        .wm-title { color: #F5F0E8; text-transform: uppercase; letter-spacing: 0.15em; font-size: 0.75rem; }
-        .wm-count { color: #8A8A9A; margin-left: auto; font-size: 0.7rem; }
-        .wm-container {
-          flex: 1;
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 2rem;
-        }
-        .wm-svg {
-          position: absolute;
-          inset: 2rem;
-          width: calc(100% - 4rem);
-          height: calc(100% - 4rem);
-          object-fit: contain;
-        }
-        .wm-grid {
-          position: absolute;
-          inset: 2rem;
-          width: calc(100% - 4rem);
-          height: calc(100% - 4rem);
-          display: grid;
-          grid-template-columns: repeat(20, 1fr);
-          grid-template-rows: repeat(10, 1fr);
-          pointer-events: none;
-        }
-        .wm-dot-cell {
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          pointer-events: auto;
-          cursor: default;
-        }
-        .wm-dot {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background: #E8572A;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 0 8px 2px rgba(232, 87, 42, 0.5);
-          position: relative;
-          z-index: 2;
-        }
-        .wm-dot-count {
-          font-size: 8px;
-          color: #0D0D1A;
-          font-weight: bold;
-          font-family: monospace;
-        }
-        .wm-pulse {
-          position: absolute;
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: rgba(232, 87, 42, 0.2);
-          animation: wm-pulse 2s ease-in-out infinite;
-          z-index: 1;
-        }
-        @keyframes wm-pulse {
-          0%, 100% { transform: scale(1); opacity: 0.3; }
-          50% { transform: scale(1.8); opacity: 0; }
-        }
-        .wm-tooltip {
-          position: absolute;
-          bottom: calc(50% + 14px);
-          left: 50%;
-          transform: translateX(-50%);
-          background: #0D0D1A;
-          border: 1px solid #E8572A;
-          padding: 4px 10px;
-          font-size: 10px;
-          color: #F5F0E8;
-          font-family: monospace;
-          white-space: nowrap;
-          z-index: 10;
-          pointer-events: none;
-        }
-        @media (max-width: 768px) {
-          .wm-container { padding: 1rem; }
-          .wm-svg { inset: 1rem; width: calc(100% - 2rem); height: calc(100% - 2rem); }
-          .wm-grid { inset: 1rem; width: calc(100% - 2rem); height: calc(100% - 2rem); }
-        }
+        .wm { height:100vh; display:flex; flex-direction:column; background:#0D0D1A; overflow:hidden; }
+        .wm-bar { display:flex; align-items:center; gap:1.5rem; padding:.75rem 1.5rem; border-bottom:1px solid #1A1A2E; font-size:.8rem; flex-shrink:0; }
+        .wm-bar a { color:#8A8A9A; text-decoration:none; }
+        .wm-bar a:hover { color:#F5F0E8; }
+        .wm-bar span { color:#F5F0E8; text-transform:uppercase; letter-spacing:.15em; font-size:.75rem; }
+        .wm-n { color:#8A8A9A !important; margin-left:auto; font-size:.7rem !important; text-transform:none !important; }
+        .wm-wrap { flex:1; display:flex; align-items:center; justify-content:center; padding:1rem 2rem; }
+        .wm-svg { width:100%; height:100%; max-width:1200px; }
+        .wm-p1 { animation: p1 2.5s ease-in-out infinite; }
+        .wm-p2 { animation: p2 2.5s ease-in-out infinite .3s; }
+        @keyframes p1 { 0%,100%{opacity:.06;} 50%{opacity:.15;} }
+        @keyframes p2 { 0%,100%{opacity:.12;} 50%{opacity:.3;} }
       `}</style>
     </div>
   )

@@ -1,262 +1,160 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 
-const W = 200, H = 100, PX = 5
+const COLS = 40
+const ROWS = 25
+const PX = 12
 
-// Seeded PRNG for consistent organic noise
-function rng(seed: number) {
-  return () => {
-    let t = seed += 0x6D2B79F5
-    t = Math.imul(t ^ t >>> 15, t | 1)
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61)
-    return ((t ^ t >>> 14) >>> 0) / 4294967296
-  }
-}
+const BG = '#0D0D1A'
+const LAND = '#1E2035'
+const ACTIVE = '#2A2D4A'
+const DOT = '#E8572A'
 
-function buildIsland(): Array<{ x: number; y: number; v: number }> {
-  const rand = rng(ISLAND_SEED)
-  const grid: number[][] = Array.from({ length: H }, () => Array(W).fill(0))
-
-  // Define Cici shape as signed distance from center of each body part
-  // Returns > 0 if inside, 0 if outside
-  function ciciShape(px: number, py: number): number {
-    // Centered at x=100, y=50, lying on side (head left)
-    const x = px, y = py
-
-    // Flame tip — small ellipse on far left
-    const ft = 1 - Math.sqrt(((x - 14) / 5) ** 2 + ((y - 50) / 4) ** 2)
-    if (ft > 0) return ft * 0.6
-
-    // Head — large ellipse, left side
-    const hx = 38, hy = 50, hrx = 22, hry = 18
-    const hd = 1 - Math.sqrt(((x - hx) / hrx) ** 2 + ((y - hy) / hry) ** 2)
-
-    // Upper eye lagoon (bay) — ellipse cutout
-    const e1 = 1 - Math.sqrt(((x - 44) / 7) ** 2 + ((y - 40) / 5) ** 2)
-    // Lower eye lagoon
-    const e2 = 1 - Math.sqrt(((x - 44) / 7) ** 2 + ((y - 60) / 5) ** 2)
-
-    if (hd > 0 && e1 <= 0.1 && e2 <= 0.1) return hd
-
-    // Neck — ellipse connecting head to body
-    const nd = 1 - Math.sqrt(((x - 68) / 12) ** 2 + ((y - 50) / 10) ** 2)
-
-    // Body — large ellipse
-    const bx = 100, by = 50, brx = 22, bry = 18
-    const bd = 1 - Math.sqrt(((x - bx) / brx) ** 2 + ((y - by) / bry) ** 2)
-
-    // Hips — connecting body to legs
-    const hipd = 1 - Math.sqrt(((x - 132) / 12) ** 2 + ((y - 50) / 10) ** 2)
-
-    // Upper leg
-    const ul = 1 - Math.sqrt(((x - 155) / 14) ** 2 + ((y - 39) / 7) ** 2)
-    // Lower leg
-    const ll = 1 - Math.sqrt(((x - 155) / 14) ** 2 + ((y - 61) / 7) ** 2)
-
-    // Upper foot — blob at end
-    const uf = 1 - Math.sqrt(((x - 175) / 9) ** 2 + ((y - 34) / 6) ** 2)
-    // Lower foot
-    const lf = 1 - Math.sqrt(((x - 175) / 9) ** 2 + ((y - 66) / 6) ** 2)
-
-    const d = Math.max(hd, nd, bd, hipd, ul, ll, uf, lf)
-    return d
-  }
-
-  // Fill grid with Cici shape + organic noise
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const d = ciciShape(x, y)
-      if (d <= -0.15) continue // definitely water
-
-      // Add organic noise to coastline
-      const noise = (rand() - 0.5) * 0.18
-      const jitter = d + noise
-
-      if (jitter > 0.15) {
-        grid[y]![x] = 3 // inland
-      } else if (jitter > 0.05) {
-        grid[y]![x] = 2 // land
-      } else if (jitter > -0.03) {
-        grid[y]![x] = 1 // coast/beach
-      }
-    }
-  }
-
-  // Carve the eye lagoons more aggressively
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const e1 = 1 - Math.sqrt(((x - 44) / 6) ** 2 + ((y - 40) / 4) ** 2)
-      const e2 = 1 - Math.sqrt(((x - 44) / 6) ** 2 + ((y - 60) / 4) ** 2)
-      if (e1 > 0.1 || e2 > 0.1) {
-        // Add slight noise to lagoon edges
-        const ln = (rand() - 0.5) * 0.2
-        if (e1 + ln > 0.05 || e2 + ln > 0.05) {
-          grid[y]![x] = 0
-        }
-      }
-    }
-  }
-
-  // Add coastal shelf (shallow water glow around island)
-  const shelf: Array<{ x: number; y: number; v: number }> = []
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (grid[y]![x]! > 0) continue
-      // Check if near land
-      let nearLand = false
-      for (let dy = -2; dy <= 2; dy++)
-        for (let dx = -2; dx <= 2; dx++) {
-          const ny = y + dy, nx = x + dx
-          if (ny >= 0 && ny < H && nx >= 0 && nx < W && grid[ny]![nx]! > 0)
-            nearLand = true
-        }
-      if (nearLand) shelf.push({ x, y, v: -1 }) // shelf marker
-    }
-  }
-
-  // Small islands
-  const islands: Array<[number, number, number]> = [
-    [20, 28, 4], [72, 30, 3], [48, 188, 4], [80, 20, 3],
-    [15, 60, 3], [85, 160, 3], [30, 75, 2],
-  ]
-  for (const [iy, ix, ir] of islands) {
-    for (let dy = -ir; dy <= ir; dy++)
-      for (let dx = -ir; dx <= ir; dx++) {
-        if (dx * dx + dy * dy <= ir * ir + (rand() - 0.5) * ir) {
-          const ny = iy + dy, nx = ix + dx
-          if (ny >= 0 && ny < H && nx >= 0 && nx < W)
-            grid[ny]![nx] = 2
-        }
-      }
-  }
-
-  // Convert to cell array
-  const cells: Array<{ x: number; y: number; v: number }> = [...shelf]
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++)
-      if (grid[y]![x]! > 0) cells.push({ x, y, v: grid[y]![x]! })
-
-  return cells
-}
-
-// Use a numeric seed (can't use string in math)
-const ISLAND_SEED = 424349
-
-const DOT: Record<string, [number, number]> = {
-  'Austria': [48, 46], 'AT': [48, 46],
-  'Germany': [42, 42], 'DE': [42, 42],
-  'France': [36, 52], 'FR': [36, 52],
-  'Switzerland': [40, 48], 'CH': [40, 48],
-  'United Kingdom': [30, 44], 'UK': [30, 44], 'GB': [30, 44],
-  'Spain': [34, 56], 'ES': [34, 56],
-  'Italy': [44, 54], 'IT': [44, 54],
-  'Netherlands': [36, 42], 'NL': [36, 42],
-  'Poland': [46, 40], 'PL': [46, 40],
-  'Sweden': [40, 36], 'SE': [40, 36],
-  'Norway': [34, 38], 'NO': [34, 38],
-  'Ukraine': [50, 42], 'UA': [50, 42],
-  'Turkey': [52, 56], 'TR': [52, 56],
-  'Romania': [50, 52], 'RO': [50, 52],
-  'Ireland': [26, 46], 'IE': [26, 46],
-  'Finland': [44, 36], 'FI': [44, 36],
-  'Denmark': [38, 40], 'DK': [38, 40],
-  'Czech Republic': [44, 44], 'CZ': [44, 44], 'Czechia': [44, 44],
-  'Hungary': [48, 50], 'HU': [48, 50],
-  'Croatia': [46, 52], 'HR': [46, 52],
-  'Belgium': [36, 44], 'BE': [36, 44],
-  'Portugal': [30, 56], 'PT': [30, 56],
-  'Israel': [62, 46], 'IL': [62, 46],
-  'Egypt': [66, 54], 'EG': [66, 54],
-  'UAE': [68, 44], 'AE': [68, 44],
-  'Morocco': [60, 56], 'MA': [60, 56],
-  'Russia': [70, 48], 'RU': [70, 48],
-  'United States': [100, 48], 'US': [100, 48], 'USA': [100, 48],
-  'Canada': [96, 38], 'CA': [96, 38],
-  'Mexico': [92, 56], 'MX': [92, 56],
-  'Brazil': [108, 56], 'BR': [108, 56],
-  'Argentina': [112, 60], 'AR': [112, 60],
-  'Colombia': [98, 58], 'CO': [98, 58],
-  'Chile': [106, 62], 'CL': [106, 62],
-  'Peru': [102, 58], 'PE': [102, 58],
-  'Nigeria': [130, 48], 'NG': [130, 48],
-  'Kenya': [134, 44], 'KE': [134, 44],
-  'South Africa': [136, 54], 'ZA': [136, 54],
-  'India': [150, 38], 'IN': [150, 38],
-  'China': [155, 36], 'CN': [155, 36],
-  'Japan': [160, 34], 'JP': [160, 34],
-  'South Korea': [158, 36], 'KR': [158, 36],
-  'Pakistan': [148, 40], 'PK': [148, 40],
-  'Australia': [158, 62], 'AU': [158, 62],
-  'New Zealand': [170, 66], 'NZ': [170, 66],
-  'Indonesia': [154, 58], 'ID': [154, 58],
-  'Thailand': [148, 58], 'TH': [148, 58],
-  'Vietnam': [150, 56], 'VN': [150, 56],
-  'Philippines': [156, 56], 'PH': [156, 56],
-  'Singapore': [150, 62], 'SG': [150, 62],
-  'Malaysia': [152, 60], 'MY': [152, 60],
-  'Taiwan': [160, 38], 'TW': [160, 38],
-}
-
-const FILLS: Record<number, string> = {
-  [-1]: '#0F1028', // shelf (shallow water)
-  1: '#1A1A36',    // coast
-  2: '#1E1E3A',    // land
-  3: '#222240',    // inland (slightly brighter)
-}
-
-// Body part regions for click detection
-const REGIONS: Array<{ name: string; cx: number; cy: number; r: number; desc: string }> = [
-  { name: 'The Head', cx: 38, cy: 50, r: 22, desc: 'Europe — where it all started' },
-  { name: 'Eye of the North', cx: 44, cy: 40, r: 6, desc: 'The northern lagoon. Good fishing.' },
-  { name: 'Eye of the South', cx: 44, cy: 60, r: 6, desc: 'The southern lagoon. Better fishing.' },
-  { name: 'The Neck', cx: 68, cy: 50, r: 12, desc: 'The narrow pass — Middle East & North Africa' },
-  { name: 'The Heart', cx: 100, cy: 50, r: 22, desc: 'The Americas — biggest landmass on the island' },
-  { name: 'The Belt', cx: 132, cy: 50, r: 12, desc: 'Africa — the crossroads' },
-  { name: 'North Ridge', cx: 155, cy: 39, r: 14, desc: 'Asia — the upper trail' },
-  { name: 'South Ridge', cx: 155, cy: 61, r: 14, desc: 'Oceania & SE Asia — the lower trail' },
-  { name: 'North Point', cx: 175, cy: 34, r: 9, desc: 'The northern foot — edge of the world' },
-  { name: 'South Point', cx: 175, cy: 66, r: 9, desc: 'The southern foot — here be dragons' },
-  { name: 'The Flame', cx: 14, cy: 50, r: 5, desc: 'The westernmost tip. The spark.' },
+// 40×25 pixel grid — 1 = land, 0 = water
+// Roughly a horizontal continental landmass (Europe → Asia shape)
+/* eslint-disable */
+const MAP: number[][] = [
+  //0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 0
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 1
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0], // 2
+  [0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0], // 3
+  [0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0], // 4
+  [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0], // 5
+  [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0], // 6
+  [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0], // 7
+  [0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0], // 8
+  [0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0], // 9
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0], // 10
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0], // 11
+  [0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0], // 12
+  [0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0], // 13
+  [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0], // 14
+  [0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0], // 15
+  [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0], // 16
+  [0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0], // 17
+  [0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 18
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 19
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 20
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 21
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 22
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 23
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 24
 ]
+/* eslint-enable */
 
-function findRegion(gx: number, gy: number): typeof REGIONS[number] | null {
-  let best: typeof REGIONS[number] | null = null
-  let bestDist = Infinity
-  for (const reg of REGIONS) {
-    const d = Math.sqrt((gx - reg.cx) ** 2 + (gy - reg.cy) ** 2)
-    if (d < reg.r && d < bestDist) { best = reg; bestDist = d }
-  }
-  return best
-}
-
-// Get unique countries in a region
-function countriesInRegion(reg: typeof REGIONS[number], countries: Record<string, number>): Array<{ name: string; count: number }> {
-  const result: Array<{ name: string; count: number }> = []
-  const seen = new Set<string>()
-  for (const [country, count] of Object.entries(countries)) {
-    if (seen.has(country)) continue
-    const pos = DOT[country]
-    if (!pos) continue
-    const d = Math.sqrt((pos[0] - reg.cx) ** 2 + (pos[1] - reg.cy) ** 2)
-    if (d < reg.r * 1.5) {
-      result.push({ name: country, count })
-      seen.add(country)
-      // Skip 2-letter aliases
-      for (const [alias, apos] of Object.entries(DOT)) {
-        if (apos[0] === pos[0] && apos[1] === pos[1]) seen.add(alias)
-      }
-    }
-  }
-  return result.sort((a, b) => b.count - a.count)
+// Country → [col, row] on the 40×25 grid
+// Placed roughly to match real-world positions on the landmass
+const COUNTRY_POS: Record<string, [number, number]> = {
+  // Europe (left cluster)
+  'Austria':        [18, 10],
+  'AT':             [18, 10],
+  'Germany':        [17, 8],
+  'DE':             [17, 8],
+  'France':         [14, 10],
+  'FR':             [14, 10],
+  'United Kingdom': [12, 7],
+  'UK':             [12, 7],
+  'GB':             [12, 7],
+  'Spain':          [12, 12],
+  'ES':             [12, 12],
+  'Italy':          [17, 12],
+  'IT':             [17, 12],
+  'Netherlands':    [15, 7],
+  'NL':             [15, 7],
+  'Poland':         [19, 8],
+  'PL':             [19, 8],
+  'Sweden':         [17, 5],
+  'SE':             [17, 5],
+  'Norway':         [15, 5],
+  'NO':             [15, 5],
+  'Switzerland':    [16, 10],
+  'CH':             [16, 10],
+  'Belgium':        [14, 8],
+  'BE':             [14, 8],
+  'Denmark':        [16, 6],
+  'DK':             [16, 6],
+  'Finland':        [20, 5],
+  'FI':             [20, 5],
+  'Ireland':        [10, 8],
+  'IE':             [10, 8],
+  'Czech Republic': [18, 9],
+  'CZ':             [18, 9],
+  'Czechia':        [18, 9],
+  'Portugal':       [10, 12],
+  'PT':             [10, 12],
+  'Romania':        [20, 11],
+  'RO':             [20, 11],
+  'Hungary':        [19, 10],
+  'HU':             [19, 10],
+  'Croatia':        [18, 11],
+  'HR':             [18, 11],
+  'Ukraine':        [21, 9],
+  'UA':             [21, 9],
+  // Middle East / Central
+  'Turkey':         [22, 11],
+  'TR':             [22, 11],
+  'Israel':         [22, 13],
+  'IL':             [22, 13],
+  // Russia / Central Asia
+  'Russia':         [28, 6],
+  'RU':             [28, 6],
+  // Asia
+  'India':          [30, 12],
+  'IN':             [30, 12],
+  'China':          [32, 8],
+  'CN':             [32, 8],
+  'Japan':          [36, 7],
+  'JP':             [36, 7],
+  'South Korea':    [35, 8],
+  'KR':             [35, 8],
+  'Pakistan':       [28, 11],
+  'PK':             [28, 11],
+  'Thailand':       [32, 12],
+  'TH':             [32, 12],
+  'Vietnam':        [33, 12],
+  'VN':             [33, 12],
+  'Indonesia':      [33, 14],
+  'ID':             [33, 14],
+  'Philippines':    [35, 12],
+  'PH':             [35, 12],
+  'Singapore':      [32, 14],
+  'SG':             [32, 14],
+  'Malaysia':       [32, 13],
+  'MY':             [32, 13],
+  'Taiwan':         [35, 10],
+  'TW':             [35, 10],
+  // Americas (mapped onto the lower-left bulge)
+  'United States':  [13, 14],
+  'US':             [13, 14],
+  'USA':            [13, 14],
+  'Canada':         [11, 13],
+  'CA':             [11, 13],
+  'Mexico':         [12, 16],
+  'MX':             [12, 16],
+  'Brazil':         [14, 17],
+  'BR':             [14, 17],
+  // Africa (center-bottom)
+  'Nigeria':        [20, 14],
+  'NG':             [20, 14],
+  'Kenya':          [23, 14],
+  'KE':             [23, 14],
+  'South Africa':   [21, 16],
+  'ZA':             [21, 16],
+  'Egypt':          [22, 12],
+  'EG':             [22, 12],
+  // Oceania
+  'Australia':      [35, 14],
+  'AU':             [35, 14],
+  'New Zealand':    [37, 15],
+  'NZ':             [37, 15],
 }
 
 export function WorldMap() {
   const [countries, setCountries] = useState<Record<string, number>>({})
   const [total, setTotal] = useState(0)
   const [hovered, setHovered] = useState<string | null>(null)
-  const [selected, setSelected] = useState<typeof REGIONS[number] | null>(null)
-  const cells = useMemo(buildIsland, [])
 
   useEffect(() => {
     fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
@@ -268,95 +166,108 @@ export function WorldMap() {
       .catch(() => {})
   }, [])
 
-  const dotCells: Record<string, { n: number; names: string[] }> = {}
+  // Build set of active grid positions (where agents are)
+  const activeSet = new Set<string>()
+  const dotCells: Record<string, { names: string[] }> = {}
   for (const [country, count] of Object.entries(countries)) {
-    const c = DOT[country]
-    if (!c) continue
-    const k = `${c[0]},${c[1]}`
-    if (!dotCells[k]) dotCells[k] = { n: 0, names: [] }
-    dotCells[k].n += count
+    const pos = COUNTRY_POS[country]
+    if (!pos) continue
+    const k = `${pos[0]},${pos[1]}`
+    activeSet.add(k)
+    // Also mark surrounding pixels as active
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        activeSet.add(`${pos[0] + dx},${pos[1] + dy}`)
+      }
+    }
+    if (!dotCells[k]) dotCells[k] = { names: [] }
     dotCells[k].names.push(`${country} · ${count}`)
   }
 
-  function handleClick(e: React.MouseEvent<SVGSVGElement>) {
-    const svg = e.currentTarget
-    const rect = svg.getBoundingClientRect()
-    const svgX = ((e.clientX - rect.left) / rect.width) * (W * PX)
-    const svgY = ((e.clientY - rect.top) / rect.height) * (H * PX)
-    const gx = svgX / PX, gy = svgY / PX
-    const reg = findRegion(gx, gy)
-    setSelected(reg === selected ? null : reg)
-  }
-
-  const svgW = W * PX, svgH = H * PX
-  const regionCountries = selected ? countriesInRegion(selected, countries) : []
+  const svgW = COLS * PX
+  const svgH = ROWS * PX
 
   return (
     <div className="wm">
       <div className="wm-bar">
         <a href="/">← fire</a>
-        <span>claude island</span>
-        {selected && <span className="wm-region" onClick={() => setSelected(null)}>✕ {selected.name}</span>}
+        <span>world</span>
         <span className="wm-n">{total} {total === 1 ? 'Cici' : 'Cicis'}</span>
       </div>
 
-      {/* Region detail panel */}
-      {selected && (
-        <div className="wm-panel">
-          <div className="wm-panel-title">{selected.name}</div>
-          <div className="wm-panel-desc">{selected.desc}</div>
-          {regionCountries.length > 0 ? (
-            <div className="wm-panel-list">
-              {regionCountries.map(c => (
-                <div key={c.name} className="wm-panel-row">
-                  <span className="wm-panel-dot" />
-                  <span>{c.name}</span>
-                  <span className="wm-panel-count">{c.count} {c.count === 1 ? 'Cici' : 'Cicis'}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="wm-panel-empty">No Cicis here yet. Be the first.</div>
-          )}
-        </div>
-      )}
-
       <div className="wm-wrap">
-        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="wm-svg" shapeRendering="crispEdges"
-          onClick={handleClick} style={{ cursor: 'pointer' }}>
-          <defs>
-            <filter id="glow">
-              <feGaussianBlur stdDeviation="3" result="b" />
-              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-          </defs>
-          {cells.map(({ x, y, v }) => (
-            <rect key={`${x},${y}`} x={x*PX} y={y*PX} width={PX+.5} height={PX+.5}
-              fill={FILLS[v] ?? '#1E1E3A'} />
-          ))}
-          {/* Selected region highlight */}
-          {selected && (
-            <circle
-              cx={selected.cx * PX} cy={selected.cy * PX} r={selected.r * PX}
-              fill="none" stroke="#E8572A" strokeWidth="1" opacity={0.3}
-              strokeDasharray="4 4" shapeRendering="auto"
-            />
+        <svg
+          viewBox={`0 0 ${svgW} ${svgH}`}
+          className="wm-svg"
+          shapeRendering="crispEdges"
+        >
+          {/* Background */}
+          <rect x={0} y={0} width={svgW} height={svgH} fill={BG} />
+
+          {/* Land pixels */}
+          {MAP.map((row, ry) =>
+            row.map((cell, cx) => {
+              if (cell === 0) return null
+              const k = `${cx},${ry}`
+              const isActive = activeSet.has(k)
+              return (
+                <rect
+                  key={k}
+                  x={cx * PX}
+                  y={ry * PX}
+                  width={PX}
+                  height={PX}
+                  fill={isActive ? ACTIVE : LAND}
+                />
+              )
+            })
           )}
 
+          {/* Agent dots — 3×3 pixel squares */}
           {Object.entries(dotCells).map(([k, dot]) => {
-            const [x, y] = k.split(',').map(Number)
-            const cx = x!*PX+PX/2, cy = y!*PX+PX/2
+            const [cx, cy] = k.split(',').map(Number)
             const isH = hovered === k
+            // Center the 3×3 dot on the grid cell
+            const dotX = cx! * PX + Math.floor((PX - 3) / 2)
+            const dotY = cy! * PX + Math.floor((PX - 3) / 2)
             return (
-              <g key={k} onMouseEnter={() => setHovered(k)} onMouseLeave={() => setHovered(null)} style={{cursor:'default'}}>
-                <circle cx={cx} cy={cy} r={12} fill="#E8572A" opacity={.08} className="wm-p1" shapeRendering="auto" />
-                <circle cx={cx} cy={cy} r={8} fill="#E8572A" opacity={.15} className="wm-p2" shapeRendering="auto" />
-                <circle cx={cx} cy={cy} r={4} fill="#E8572A" filter="url(#glow)" shapeRendering="auto" />
+              <g
+                key={k}
+                onMouseEnter={() => setHovered(k)}
+                onMouseLeave={() => setHovered(null)}
+                style={{ cursor: 'default' }}
+              >
+                <rect
+                  x={dotX}
+                  y={dotY}
+                  width={3}
+                  height={3}
+                  fill={DOT}
+                  className="wm-dot"
+                />
                 {isH && (
-                  <g shapeRendering="auto">
-                    <rect x={cx-30} y={cy-16} width={60} height={12*dot.names.length+4} fill="#0D0D1A" stroke="#E8572A" strokeWidth=".5" rx="1" />
-                    {dot.names.map((n,i) => (
-                      <text key={i} x={cx} y={cy-8+i*12} textAnchor="middle" fill="#F5F0E8" fontSize="6" fontFamily="monospace">{n}</text>
+                  <g>
+                    <rect
+                      x={cx! * PX - 24}
+                      y={cy! * PX - 10 * dot.names.length - 4}
+                      width={60}
+                      height={10 * dot.names.length + 4}
+                      fill={BG}
+                      stroke="#1A1A2E"
+                      strokeWidth={1}
+                    />
+                    {dot.names.map((n, i) => (
+                      <text
+                        key={i}
+                        x={cx! * PX + 6}
+                        y={cy! * PX - 10 * (dot.names.length - i) + 4}
+                        fill="#F5F0E8"
+                        fontSize="5"
+                        fontFamily="monospace"
+                        shapeRendering="auto"
+                      >
+                        {n}
+                      </text>
                     ))}
                   </g>
                 )}
@@ -366,28 +277,15 @@ export function WorldMap() {
         </svg>
       </div>
       <style>{`
-        .wm{height:100vh;display:flex;flex-direction:column;background:#0D0D1A;overflow:hidden}
+        .wm{height:100vh;display:flex;flex-direction:column;background:${BG};overflow:hidden}
         .wm-bar{display:flex;align-items:center;gap:1.5rem;padding:.75rem 1.5rem;border-bottom:1px solid #1A1A2E;font-size:.8rem;flex-shrink:0}
         .wm-bar a{color:#8A8A9A;text-decoration:none}.wm-bar a:hover{color:#F5F0E8}
         .wm-bar span{color:#F5F0E8;text-transform:uppercase;letter-spacing:.15em;font-size:.75rem}
         .wm-n{color:#8A8A9A!important;margin-left:auto;font-size:.7rem!important;text-transform:none!important}
-        .wm-region{color:#E8572A!important;cursor:pointer;font-size:.7rem!important;text-transform:none!important;letter-spacing:0!important}
-        .wm-region:hover{opacity:.7}
-        .wm-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:1rem 2rem;position:relative}
-        .wm-svg{width:100%;height:100%;max-width:1400px}
-        .wm-panel{position:absolute;top:0;right:0;width:280px;height:100%;background:#0D0D1A;border-left:1px solid #1A1A2E;padding:1.5rem;overflow-y:auto;z-index:10;animation:slide-in .2s ease-out}
-        .wm-panel-title{font-size:1rem;color:#E8572A;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.1em}
-        .wm-panel-desc{font-size:.75rem;color:#8A8A9A;margin-bottom:1.5rem;line-height:1.5}
-        .wm-panel-list{display:flex;flex-direction:column;gap:.5rem}
-        .wm-panel-row{display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:#F5F0E8;padding:.4rem .5rem;background:#1A1A2E}
-        .wm-panel-dot{width:6px;height:6px;border-radius:50%;background:#E8572A;flex-shrink:0}
-        .wm-panel-count{margin-left:auto;color:#8A8A9A;font-size:.65rem}
-        .wm-panel-empty{font-size:.75rem;color:#8A8A9A;font-style:italic}
-        @keyframes slide-in{from{transform:translateX(100%)}to{transform:translateX(0)}}
-        .wm-p1{animation:p1 2.5s ease-in-out infinite}
-        .wm-p2{animation:p2 2.5s ease-in-out infinite .3s}
-        @keyframes p1{0%,100%{opacity:.05}50%{opacity:.15}}
-        @keyframes p2{0%,100%{opacity:.1}50%{opacity:.3}}
+        .wm-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem}
+        .wm-svg{width:100%;height:100%;max-width:${svgW}px}
+        .wm-dot{animation:dot-pulse 2s ease-in-out infinite}
+        @keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:.4}}
       `}</style>
     </div>
   )

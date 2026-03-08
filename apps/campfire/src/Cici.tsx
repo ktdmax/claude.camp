@@ -8,113 +8,122 @@ interface CiciProps {
   style?: React.CSSProperties
 }
 
-// Pixel art eyes/mouth variants per state
-function getEyes(state: CiciState): { left: string; right: string; mouth: string } {
-  switch (state) {
-    case 'celebrating':
-    case 'new':
-      return { left: '◕', right: '◕', mouth: '‿' }
-    default:
-      return { left: '◉', right: '◉', mouth: '▲' }
-  }
-}
+// 9x11 pixel grid, 5px per pixel = 45x55 viewBox
+// Distinct from Super Meat Boy: pointed head, neck, narrower body, visible feet
 
-export function Cici({ state = 'idle', size = 42, style }: CiciProps) {
-  const scale = size / 42
-  const p = 6 // pixel size in SVG units
-
-  const fill = '#E8572A'
-  const dark = '#1A1A2E'
-  const eyes = getEyes(state)
-
-  // Celebrating Cici has slightly different mouth row
+export function Cici({ state = 'idle', size = 45, style }: CiciProps) {
+  const scale = size / 45
+  const p = 5
+  const f = '#E8572A'   // fill
+  const d = '#1A1A2E'   // dark (eyes, mouth)
+  const h = '#FF7B4A'   // highlight (lighter orange for details)
   const isHappy = state === 'celebrating' || state === 'new'
 
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 42 54"
-      width={42 * scale}
-      height={54 * scale}
+      viewBox="0 0 45 55"
+      width={45 * scale}
+      height={55 * scale}
       className={`cici ${state}`}
       style={style}
+      shapeRendering="crispEdges"
     >
+      {/* Row 0: flame tip — single pixel, gives pointy silhouette */}
+      <rect x={p * 4} y={0} width={p} height={p} fill={h} />
+
       {/* Row 1: head top */}
-      <rect x={p} y={0} width={p} height={p} fill={fill} />
-      <rect x={p * 2} y={0} width={p} height={p} fill={fill} />
-      <rect x={p * 3} y={0} width={p} height={p} fill={fill} />
-      <rect x={p * 4} y={0} width={p} height={p} fill={fill} />
-      <rect x={p * 5} y={0} width={p} height={p} fill={fill} />
+      <rect x={p * 2} y={p} width={p} height={p} fill={f} />
+      <rect x={p * 3} y={p} width={p} height={p} fill={f} />
+      <rect x={p * 4} y={p} width={p} height={p} fill={f} />
+      <rect x={p * 5} y={p} width={p} height={p} fill={f} />
+      <rect x={p * 6} y={p} width={p} height={p} fill={f} />
 
-      {/* Row 2: eyes */}
-      <rect x={0} y={p} width={p} height={p} fill={fill} />
-      <rect x={p * 2} y={p} width={p} height={p} fill={dark} />
-      <rect x={p * 4} y={p} width={p} height={p} fill={dark} />
-      <rect x={p * 6} y={p} width={p} height={p} fill={fill} />
+      {/* Row 2: head with eyes — wider */}
+      <rect x={p * 1} y={p * 2} width={p} height={p} fill={f} />
+      <rect x={p * 2} y={p * 2} width={p} height={p} fill={f} />
+      <rect x={p * 3} y={p * 2} width={p} height={p} fill={isHappy ? h : d} />
+      <rect x={p * 4} y={p * 2} width={p} height={p} fill={f} />
+      <rect x={p * 5} y={p * 2} width={p} height={p} fill={isHappy ? h : d} />
+      <rect x={p * 6} y={p * 2} width={p} height={p} fill={f} />
+      <rect x={p * 7} y={p * 2} width={p} height={p} fill={f} />
 
-      {/* Row 3: mouth */}
-      <rect x={p} y={p * 2} width={p} height={p} fill={fill} />
-      <rect x={p * 3} y={p * 2} width={p} height={p} fill={isHappy ? fill : dark} />
-      <rect x={p * 5} y={p * 2} width={p} height={p} fill={fill} />
-      {/* Happy mouth: wider, lower arc implied by extra pixels */}
+      {/* Row 3: mouth area */}
+      <rect x={p * 2} y={p * 3} width={p} height={p} fill={f} />
+      <rect x={p * 3} y={p * 3} width={p} height={p} fill={f} />
+      <rect x={p * 4} y={p * 3} width={p} height={p} fill={isHappy ? d : f} />
+      <rect x={p * 5} y={p * 3} width={p} height={p} fill={f} />
+      <rect x={p * 6} y={p * 3} width={p} height={p} fill={f} />
+      {/* Smile: tiny mouth pixels */}
       {isHappy && (
         <>
-          <rect x={p * 2} y={p * 2} width={p} height={p} fill={dark} opacity={0.4} />
-          <rect x={p * 4} y={p * 2} width={p} height={p} fill={dark} opacity={0.4} />
+          <rect x={p * 3} y={p * 3} width={p} height={p} fill={d} opacity={0.3} />
+          <rect x={p * 5} y={p * 3} width={p} height={p} fill={d} opacity={0.3} />
         </>
       )}
 
-      {/* Row 4: chin */}
-      <rect x={p * 2} y={p * 3} width={p} height={p} fill={fill} />
-      <rect x={p * 3} y={p * 3} width={p} height={p} fill={fill} />
-      <rect x={p * 4} y={p * 3} width={p} height={p} fill={fill} />
+      {/* Row 4: chin — narrower = neck implied */}
+      <rect x={p * 3} y={p * 4} width={p} height={p} fill={f} />
+      <rect x={p * 4} y={p * 4} width={p} height={p} fill={f} />
+      <rect x={p * 5} y={p * 4} width={p} height={p} fill={f} />
 
-      {/* Row 5: body top */}
-      <rect x={p} y={p * 4} width={p} height={p} fill={fill} />
-      <rect x={p * 2} y={p * 4} width={p} height={p} fill={fill} />
-      <rect x={p * 3} y={p * 4} width={p} height={p} fill={fill} />
-      <rect x={p * 4} y={p * 4} width={p} height={p} fill={fill} />
-      <rect x={p * 5} y={p * 4} width={p} height={p} fill={fill} />
+      {/* Row 5: shoulders */}
+      <rect x={p * 2} y={p * 5} width={p} height={p} fill={f} />
+      <rect x={p * 3} y={p * 5} width={p} height={p} fill={f} />
+      <rect x={p * 4} y={p * 5} width={p} height={p} fill={f} />
+      <rect x={p * 5} y={p * 5} width={p} height={p} fill={f} />
+      <rect x={p * 6} y={p * 5} width={p} height={p} fill={f} />
 
-      {/* Row 6–8: legs vary by state */}
+      {/* Row 6: torso */}
+      <rect x={p * 2} y={p * 6} width={p} height={p} fill={f} />
+      <rect x={p * 3} y={p * 6} width={p} height={p} fill={f} />
+      <rect x={p * 4} y={p * 6} width={p} height={p} fill={h} />
+      <rect x={p * 5} y={p * 6} width={p} height={p} fill={f} />
+      <rect x={p * 6} y={p * 6} width={p} height={p} fill={f} />
+
+      {/* Row 7: hips */}
+      <rect x={p * 3} y={p * 7} width={p} height={p} fill={f} />
+      <rect x={p * 4} y={p * 7} width={p} height={p} fill={f} />
+      <rect x={p * 5} y={p * 7} width={p} height={p} fill={f} />
+
+      {/* Row 8-9: legs + feet */}
       {state === 'working' ? (
         <>
-          {/* Walking: legs apart */}
-          <rect x={p} y={p * 5} width={p} height={p} fill={fill} />
-          <rect x={p * 3} y={p * 5} width={p} height={p} fill={fill} />
-          <rect x={p * 5} y={p * 5} width={p} height={p} fill={fill} />
-          <rect x={p} y={p * 6} width={p} height={p} fill={fill} />
-          <rect x={p * 5} y={p * 6} width={p} height={p} fill={fill} />
+          <rect x={p * 2} y={p * 8} width={p} height={p} fill={f} />
+          <rect x={p * 6} y={p * 8} width={p} height={p} fill={f} />
+          <rect x={p * 1} y={p * 9} width={p} height={p} fill={f} />
+          <rect x={p * 7} y={p * 9} width={p} height={p} fill={f} />
         </>
       ) : (
         <>
-          {/* Standing: legs together */}
-          <rect x={p} y={p * 5} width={p} height={p} fill={fill} />
-          <rect x={p * 2} y={p * 5} width={p} height={p} fill={fill} />
-          <rect x={p * 3} y={p * 5} width={p} height={p} fill={fill} />
-          <rect x={p * 4} y={p * 5} width={p} height={p} fill={fill} />
-          <rect x={p * 5} y={p * 5} width={p} height={p} fill={fill} />
+          <rect x={p * 3} y={p * 8} width={p} height={p} fill={f} />
+          <rect x={p * 5} y={p * 8} width={p} height={p} fill={f} />
+          <rect x={p * 2} y={p * 9} width={p} height={p} fill={f} />
+          <rect x={p * 6} y={p * 9} width={p} height={p} fill={f} />
         </>
       )}
 
-      {/* Working gear icon */}
+      {/* State indicators */}
       {state === 'working' && (
-        <text x={p * 6} y={p * 4 + 4} fontSize="8" fill="#F5F0E8" opacity={0.7}>⚙</text>
+        <rect x={p * 8} y={p * 4} width={p} height={p} fill={h} opacity={0.6} />
       )}
-
-      {/* Celebrating sparkle */}
       {state === 'celebrating' && (
-        <text x={p * 6} y={p} fontSize="8" fill="#FFD700">✨</text>
+        <>
+          <rect x={p * 0} y={p * 0} width={p} height={p} fill="#FFD700" opacity={0.8} />
+          <rect x={p * 8} y={p * 1} width={p} height={p} fill="#FFD700" opacity={0.6} />
+        </>
       )}
-
-      {/* New wave */}
       {state === 'new' && (
-        <text x={p * 6} y={p} fontSize="8" fill="#F5F0E8">👋</text>
+        <>
+          <rect x={p * 8} y={p * 2} width={p} height={p} fill={h} opacity={0.8} />
+          <rect x={p * 8} y={p * 3} width={p} height={p} fill={h} opacity={0.5} />
+        </>
       )}
-
-      {/* Thinking dots */}
       {state === 'thinking' && (
-        <text x={p * 6} y={p * 3} fontSize="6" fill="#F5F0E8" opacity={0.5}>...</text>
+        <>
+          <rect x={p * 7} y={p * 1} width={p} height={p} fill={h} opacity={0.4} />
+          <rect x={p * 8} y={p * 0} width={p} height={p} fill={h} opacity={0.3} />
+        </>
       )}
     </svg>
   )

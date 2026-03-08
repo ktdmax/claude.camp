@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 
 // 100 columns × 50 rows
 // x = (lon+180)/3.6, y = (90-lat)/3.6
-const W = 100, H = 50, PX = 10
+const W = 100, H = 50, PX = 5
 
 // Land defined as horizontal spans: [row, colStart, colEnd]
 const SPANS: Array<[number, number, number]> = [

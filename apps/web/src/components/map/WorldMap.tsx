@@ -232,21 +232,44 @@ export function WorldMap() {
     }
   }, [])
 
-  // Build set of active grid positions
-  const activeSet = new Set<string>()
-  const dotCells: Record<string, { names: string[] }> = {}
+  // Build light data — each country becomes a cluster of tiny lights
+  // More agents = more lights + brighter, like earth at night
+  type Light = { x: number; y: number; count: number; name: string; delay: number; bright: number }
+  const lights: Light[] = []
+  const tooltipMap: Record<string, string[]> = {}
+
   for (const [country, count] of Object.entries(countries)) {
     const pos = COUNTRY_POS[country]
     if (!pos) continue
-    const k = `${pos[0]},${pos[1]}`
-    activeSet.add(k)
-    for (let dy = -2; dy <= 2; dy++) {
-      for (let dx = -2; dx <= 2; dx++) {
-        activeSet.add(`${pos[0] + dx},${pos[1] + dy}`)
-      }
+    const cx = pos[0] * PX + PX / 2
+    const cy = pos[1] * PX + PX / 2
+    const tk = `${pos[0]},${pos[1]}`
+    if (!tooltipMap[tk]) tooltipMap[tk] = []
+    tooltipMap[tk].push(`${country} · ${count}`)
+
+    // Brightness: log scale so 1→0.4, 10→0.65, 100→0.85, 287→1.0
+    const bright = Math.min(1, 0.35 + Math.log10(Math.max(1, count)) * 0.27)
+
+    // Main light
+    const hash0 = ((pos[0] * 7 + pos[1] * 13) % 17)
+    lights.push({ x: cx, y: cy, count, name: country, delay: hash0 * 0.2, bright })
+
+    // Extra scattered lights based on density
+    const extraCount = count > 100 ? 6 : count > 50 ? 4 : count > 20 ? 3 : count > 8 ? 2 : count > 3 ? 1 : 0
+    // Deterministic scatter offsets — small pixel offsets around the main point
+    const offsets: [number, number][] = [
+      [-5, -3], [4, -5], [-4, 4], [6, 3], [-2, -6], [3, 6], [7, -2], [-6, 1],
+    ]
+    for (let i = 0; i < extraCount; i++) {
+      const [ox, oy] = offsets[i % offsets.length]!
+      const hash = ((pos[0] * 31 + pos[1] * 17 + i * 7) % 23)
+      lights.push({
+        x: cx + ox, y: cy + oy,
+        count, name: country,
+        delay: hash * 0.15,
+        bright: bright * (0.5 + (hash % 5) * 0.1), // dimmer satellites
+      })
     }
-    if (!dotCells[k]) dotCells[k] = { names: [] }
-    dotCells[k].names.push(`${country} · ${count}`)
   }
 
   const svgW = COLS * PX
@@ -268,28 +291,59 @@ export function WorldMap() {
         >
           <rect x={0} y={0} width={svgW} height={svgH} fill={BG} />
 
-          {cells.map(({ x, y, v }) => {
-            const k = `${x},${y}`
-            const isActive = v > 0 && activeSet.has(k)
+          {/* Land — no active region highlighting */}
+          {cells.map(({ x, y, v }) => (
+            <rect
+              key={`${x},${y}`}
+              x={x * PX}
+              y={y * PX}
+              width={PX}
+              height={PX}
+              fill={pixelFill(x, y, v)}
+            />
+          ))}
+
+          {/* Warm glow halos behind lights */}
+          {lights.map((l, i) => (
+            <rect
+              key={`g${i}`}
+              x={l.x - 4}
+              y={l.y - 4}
+              width={8}
+              height={8}
+              fill="#E8572A"
+              opacity={l.bright * 0.08}
+              className="wm-flicker"
+              style={{ animationDelay: `${l.delay + 0.5}s` }}
+              shapeRendering="auto"
+            />
+          ))}
+
+          {/* Light dots — tiny 2×2 pixel squares */}
+          {lights.map((l, i) => {
+            // Color: dim=deep orange, bright=warm yellow
+            const r = Math.round(232 + (255 - 232) * l.bright)
+            const g = Math.round(87 + (200 - 87) * l.bright * 0.6)
+            const b = Math.round(42 + (60 - 42) * l.bright * 0.3)
             return (
               <rect
-                key={k}
-                x={x * PX}
-                y={y * PX}
-                width={PX}
-                height={PX}
-                fill={isActive ? ACTIVE : pixelFill(x, y, v)}
+                key={`l${i}`}
+                x={l.x - 1}
+                y={l.y - 1}
+                width={2}
+                height={2}
+                fill={`rgb(${r},${g},${b})`}
+                className="wm-flicker"
+                style={{ animationDelay: `${l.delay}s` }}
               />
             )
           })}
 
-          {/* Agent dots — 4×4 pixel squares (scaled up) */}
-          {Object.entries(dotCells).map(([k, dot]) => {
-            const [cx, cy] = k.split(',').map(Number)
+          {/* Hover zones — invisible rects over each country position */}
+          {Object.entries(tooltipMap).map(([k, names]) => {
+            const [gx, gy] = k.split(',').map(Number)
             const isH = hovered === k
-            const dotSize = 4
-            const dotX = cx! * PX + Math.floor((PX - dotSize) / 2)
-            const dotY = cy! * PX + Math.floor((PX - dotSize) / 2)
+            const px = gx! * PX, py = gy! * PX
             return (
               <g
                 key={k}
@@ -297,30 +351,23 @@ export function WorldMap() {
                 onMouseLeave={() => setHovered(null)}
                 style={{ cursor: 'default' }}
               >
-                <rect
-                  x={dotX}
-                  y={dotY}
-                  width={dotSize}
-                  height={dotSize}
-                  fill={DOT_COLOR}
-                  className="wm-dot"
-                />
+                <rect x={px - 6} y={py - 6} width={PX + 12} height={PX + 12} fill="transparent" />
                 {isH && (
                   <g>
                     <rect
-                      x={cx! * PX - 30}
-                      y={cy! * PX - 12 * dot.names.length - 6}
+                      x={px - 30}
+                      y={py - 12 * names.length - 6}
                       width={80}
-                      height={12 * dot.names.length + 6}
+                      height={12 * names.length + 6}
                       fill={BG}
                       stroke="#1A1A2E"
                       strokeWidth={1}
                     />
-                    {dot.names.map((n, i) => (
+                    {names.map((n, i) => (
                       <text
                         key={i}
-                        x={cx! * PX + 10}
-                        y={cy! * PX - 12 * (dot.names.length - i) + 2}
+                        x={px + 10}
+                        y={py - 12 * (names.length - i) + 2}
                         fill="#F5F0E8"
                         fontSize="7"
                         fontFamily="monospace"
@@ -344,8 +391,8 @@ export function WorldMap() {
         .wm-n{color:#8A8A9A!important;margin-left:auto;font-size:.7rem!important;text-transform:none!important}
         .wm-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:1rem}
         .wm-svg{width:100%;height:100%;max-width:${svgW}px}
-        .wm-dot{animation:dot-pulse 2s ease-in-out infinite}
-        @keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        .wm-flicker{animation:flicker 1.5s ease-in-out infinite alternate}
+        @keyframes flicker{0%{opacity:1}30%{opacity:.7}50%{opacity:1}70%{opacity:.5}100%{opacity:.9}}
       `}</style>
     </div>
   )

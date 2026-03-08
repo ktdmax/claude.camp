@@ -4,99 +4,158 @@ import { useEffect, useState, useMemo } from 'react'
 
 const W = 200, H = 100, PX = 5
 
-// Seeded PRNG
-function mulberry32(seed: number) {
-  return () => {
-    let t = seed += 0x6D2B79F5
-    t = Math.imul(t ^ t >>> 15, t | 1)
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61)
-    return ((t ^ t >>> 14) >>> 0) / 4294967296
-  }
-}
+// Claude Island — hand-crafted pixel art island
+const SPANS: Array<[number, number, number]> = [
+  // Northern archipelago
+  [18,85,89],[18,93,95],
+  [19,84,91],[19,93,96],
+  [20,83,92],[20,94,97],
+  [21,82,93],[21,95,98],
+  [22,81,99],
 
-// 2D value noise with smooth interpolation
-function generateNoise(w: number, h: number, rand: () => number): number[][] {
-  const grid: number[][] = Array.from({ length: h }, () => Array(w).fill(0))
+  // Main island — northern coast
+  [24,72,74],[24,78,80],
+  [25,70,76],[25,78,82],
+  [26,68,84],
+  [27,66,86],
+  [28,64,88],
+  [29,62,90],
+  [30,60,92],
 
-  // Multiple octaves for natural-looking terrain
-  const octaves = [
-    { scale: 6, weight: 0.5 },
-    { scale: 12, weight: 0.25 },
-    { scale: 24, weight: 0.15 },
-    { scale: 48, weight: 0.1 },
-  ]
+  // Main body — widest part
+  [31,58,96],
+  [32,56,98],
+  [33,54,100],
+  [34,53,102],
+  [35,52,104],
+  [36,51,106],
+  [37,50,108],
+  [38,49,110],
+  [39,48,112],
+  [40,47,114],
+  [41,47,116],
+  [42,46,118],
+  [43,46,119],
+  [44,46,120],
+  [45,46,121],
+  [46,46,122],
 
-  for (const { scale, weight } of octaves) {
-    const gw = Math.ceil(w / scale) + 2
-    const gh = Math.ceil(h / scale) + 2
-    const base: number[][] = Array.from({ length: gh }, () =>
-      Array.from({ length: gw }, () => rand())
-    )
+  // Central — with bay on east side
+  [47,46,108],[47,112,123],
+  [48,46,106],[48,114,124],
+  [49,46,104],[49,116,124],
+  [50,47,102],[50,117,124],
 
-    // Smooth interpolation
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const fx = x / scale
-        const fy = y / scale
-        const ix = Math.floor(fx)
-        const iy = Math.floor(fy)
-        const dx = fx - ix
-        const dy = fy - iy
-        // Smoothstep
-        const sx = dx * dx * (3 - 2 * dx)
-        const sy = dy * dy * (3 - 2 * dy)
+  // Southern bulk
+  [51,47,100],[51,116,125],
+  [52,48,99],[52,114,126],
+  [53,48,98],[53,112,126],
+  [54,49,127],
+  [55,50,128],
+  [56,50,128],
+  [57,51,128],
+  [58,52,127],
+  [59,52,126],
+  [60,53,126],
+  [61,54,125],
+  [62,54,124],
+  [63,55,124],
+  [64,56,123],
+  [65,56,122],
+  [66,57,120],
+  [67,58,118],
+  [68,59,116],
+  [69,60,114],
+  [70,62,112],
+  [71,64,110],
+  [72,66,108],
+  [73,68,106],
+  [74,70,104],
+  [75,72,102],
+  [76,75,100],
+  [77,78,98],
+  [78,80,96],
+  [79,82,94],
+  [80,84,92],
 
-        const v00 = base[iy]![ix]!
-        const v10 = base[iy]![ix + 1]!
-        const v01 = base[iy + 1]![ix]!
-        const v11 = base[iy + 1]![ix + 1]!
+  // Southern small islands
+  [82,88,91],
+  [83,87,90],
+  [84,88,90],
 
-        const v = v00 * (1 - sx) * (1 - sy) + v10 * sx * (1 - sy) +
-                  v01 * (1 - sx) * sy + v11 * sx * sy
+  // Western small island
+  [52,38,42],
+  [53,37,43],
+  [54,36,44],
+  [55,36,44],
+  [56,37,43],
+  [57,38,42],
 
-        grid[y]![x]! += v * weight
-      }
-    }
-  }
+  // Eastern reef islands
+  [38,118,121],
+  [39,117,122],
+  [40,118,123],
+  [41,119,122],
 
-  return grid
-}
+  [60,130,133],
+  [61,129,134],
+  [62,129,134],
+  [63,130,133],
 
-function generateMap(seed: number): { cells: Array<{ x: number; y: number; v: number }>; seed: number } {
-  const rand = mulberry32(seed)
-  const noise = generateNoise(W, H, rand)
+  // Northern tiny island
+  [15,90,92],
+  [16,89,93],
+  [17,90,92],
+]
 
-  // Find threshold for ~30% land coverage
-  const flat = noise.flatMap(r => r).sort((a, b) => a - b)
-  const landThreshold = flat[Math.floor(flat.length * 0.70)]!
-  const coastThreshold = flat[Math.floor(flat.length * 0.65)]!
+// Coast cells: land cells with at least one water neighbor
+function buildMap(): Array<{ x: number; y: number; v: number }> {
+  const land = new Set<string>()
+  for (const [y, x1, x2] of SPANS)
+    for (let x = x1; x <= x2; x++) land.add(`${x},${y}`)
 
   const cells: Array<{ x: number; y: number; v: number }> = []
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const v = noise[y]![x]!
-      if (v >= landThreshold) cells.push({ x, y, v: 2 })
-      else if (v >= coastThreshold) cells.push({ x, y, v: 1 })
+  for (const key of land) {
+    const [x, y] = key.split(',').map(Number)
+    // Check if coastal (has water neighbor)
+    let coastal = false
+    for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+      if (!land.has(`${x!+dx!},${y!+dy!}`)) { coastal = true; break }
     }
+    cells.push({ x: x!, y: y!, v: coastal ? 1 : 2 })
   }
-
-  return { cells, seed }
+  return cells
 }
 
-// Country dot positions (percentage-based, works with any map)
+// Named locations on the island
 const DOT: Record<string, [number, number]> = {
-  'Austria': [54.5, 23], 'AT': [54.5, 23],
-  'Germany': [52.5, 21], 'DE': [52.5, 21],
-  'United States': [23, 28], 'US': [23, 28], 'USA': [23, 28],
-  'United Kingdom': [50, 16], 'UK': [50, 16], 'GB': [50, 16],
-  'France': [50.5, 24], 'FR': [50.5, 24],
-  'Japan': [89, 25], 'JP': [89, 25],
-  'India': [71, 40], 'IN': [71, 40],
-  'Brazil': [37, 62], 'BR': [37, 62],
-  'Canada': [22, 14], 'CA': [22, 14],
-  'Australia': [91, 70], 'AU': [91, 70],
-  'China': [82, 24], 'CN': [82, 24],
-  'Russia': [72, 10], 'RU': [72, 10],
+  'Austria': [85, 45], 'AT': [85, 45],
+  'Germany': [78, 42], 'DE': [78, 42],
+  'Switzerland': [75, 46], 'CH': [75, 46],
+  'United States': [58, 38], 'US': [58, 38], 'USA': [58, 38],
+  'United Kingdom': [65, 34], 'UK': [65, 34], 'GB': [65, 34],
+  'France': [70, 44], 'FR': [70, 44],
+  'Japan': [110, 52], 'JP': [110, 52],
+  'India': [100, 58], 'IN': [100, 58],
+  'Brazil': [80, 65], 'BR': [80, 65],
+  'Canada': [55, 33], 'CA': [55, 33],
+  'Australia': [115, 62], 'AU': [115, 62],
+  'China': [105, 44], 'CN': [105, 44],
+  'Russia': [95, 35], 'RU': [95, 35],
+  'Spain': [62, 50], 'ES': [62, 50],
+  'Italy': [88, 52], 'IT': [88, 52],
+  'South Korea': [108, 48], 'KR': [108, 48],
+  'Netherlands': [72, 38], 'NL': [72, 38],
+  'Sweden': [80, 33], 'SE': [80, 33],
+  'Poland': [88, 38], 'PL': [88, 38],
+  'Turkey': [95, 50], 'TR': [95, 50],
+  'Nigeria': [70, 58], 'NG': [70, 58],
+  'South Africa': [90, 70], 'ZA': [90, 70],
+  'Argentina': [65, 68], 'AR': [65, 68],
+  'Mexico': [55, 48], 'MX': [55, 48],
+  'Colombia': [58, 55], 'CO': [58, 55],
+  'Egypt': [92, 55], 'EG': [92, 55],
+  'Indonesia': [112, 56], 'ID': [112, 56],
 }
 
 export function WorldMap() {
@@ -104,16 +163,7 @@ export function WorldMap() {
   const [total, setTotal] = useState(0)
   const [hovered, setHovered] = useState<string | null>(null)
 
-  const seed = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const s = params.get('seed')
-      if (s) return parseInt(s)
-    }
-    return Math.floor(Math.random() * 2147483647)
-  }, [])
-
-  const { cells } = useMemo(() => generateMap(seed), [seed])
+  const cells = useMemo(buildMap, [])
 
   useEffect(() => {
     fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
@@ -129,9 +179,7 @@ export function WorldMap() {
   for (const [country, count] of Object.entries(countries)) {
     const c = DOT[country]
     if (!c) continue
-    const gx = Math.round((c[0] / 100) * W)
-    const gy = Math.round((c[1] / 100) * H)
-    const k = `${gx},${gy}`
+    const k = `${c[0]},${c[1]}`
     if (!dotCells[k]) dotCells[k] = { n: 0, names: [] }
     dotCells[k].n += count
     dotCells[k].names.push(`${country} · ${count}`)
@@ -144,8 +192,7 @@ export function WorldMap() {
     <div className="wm">
       <div className="wm-bar">
         <a href="/">← fire</a>
-        <span>world</span>
-        <span className="wm-seed">seed: {seed}</span>
+        <span>claude island</span>
         <span className="wm-n">{total} {total === 1 ? 'Cici' : 'Cicis'}</span>
       </div>
       <div className="wm-wrap">
@@ -201,7 +248,6 @@ export function WorldMap() {
         .wm-bar a { color:#8A8A9A; text-decoration:none; }
         .wm-bar a:hover { color:#F5F0E8; }
         .wm-bar span { color:#F5F0E8; text-transform:uppercase; letter-spacing:.15em; font-size:.75rem; }
-        .wm-seed { color:#8A8A9A !important; font-size:.6rem !important; text-transform:none !important; letter-spacing:0 !important; }
         .wm-n { color:#8A8A9A !important; margin-left:auto; font-size:.7rem !important; text-transform:none !important; }
         .wm-wrap { flex:1; display:flex; align-items:center; justify-content:center; padding:1rem 2rem; }
         .wm-svg { width:100%; height:100%; max-width:1400px; }

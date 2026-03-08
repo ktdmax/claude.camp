@@ -1,164 +1,240 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 
-// Country → approximate [x%, y%] position on equirectangular projection
+const GRID_W = 120
+const GRID_H = 60
+const PX = 8 // pixel size in SVG units
+
+// Country → [x%, y%] on the grid (0-100%)
 const COUNTRY_POS: Record<string, [number, number]> = {
-  'Austria': [53.5, 32.5], 'AT': [53.5, 32.5],
-  'Germany': [52, 31], 'DE': [52, 31],
-  'Switzerland': [51.5, 32.5], 'CH': [51.5, 32.5],
-  'United States': [22, 38], 'US': [22, 38], 'USA': [22, 38],
-  'United Kingdom': [49.5, 28.5], 'UK': [49.5, 28.5], 'GB': [49.5, 28.5],
-  'France': [50.5, 31.5], 'FR': [50.5, 31.5],
-  'Netherlands': [51.5, 30], 'NL': [51.5, 30],
-  'Japan': [86, 36], 'JP': [86, 36],
-  'India': [75, 45], 'IN': [75, 45],
-  'Brazil': [35, 58], 'BR': [35, 58],
-  'Canada': [20, 30], 'CA': [20, 30],
-  'Australia': [84, 65], 'AU': [84, 65],
-  'Sweden': [53, 24], 'SE': [53, 24],
-  'Norway': [52, 22], 'NO': [52, 22],
-  'Finland': [55, 23], 'FI': [55, 23],
-  'Denmark': [52.5, 27.5], 'DK': [52.5, 27.5],
-  'Poland': [55, 30], 'PL': [55, 30],
-  'Spain': [48.5, 35], 'ES': [48.5, 35],
-  'Italy': [53, 34], 'IT': [53, 34],
-  'Portugal': [47, 35.5], 'PT': [47, 35.5],
-  'Belgium': [51, 30.5], 'BE': [51, 30.5],
-  'Czech Republic': [54, 31], 'CZ': [54, 31], 'Czechia': [54, 31],
-  'Ireland': [48, 29], 'IE': [48, 29],
-  'South Korea': [84, 38], 'KR': [84, 38],
-  'Singapore': [79, 52], 'SG': [79, 52],
-  'Israel': [62, 39], 'IL': [62, 39],
-  'China': [80, 38], 'CN': [80, 38],
-  'Mexico': [17, 44], 'MX': [17, 44],
-  'Argentina': [30, 68], 'AR': [30, 68],
-  'Colombia': [26, 52], 'CO': [26, 52],
-  'Romania': [56, 32], 'RO': [56, 32],
-  'Ukraine': [58, 30], 'UA': [58, 30],
-  'Turkey': [61, 34], 'TR': [61, 34],
-  'New Zealand': [92, 68], 'NZ': [92, 68],
-  'South Africa': [57, 66], 'ZA': [57, 66],
-  'Nigeria': [52, 50], 'NG': [52, 50],
-  'Kenya': [60, 52], 'KE': [60, 52],
-  'Indonesia': [81, 53], 'ID': [81, 53],
-  'Philippines': [83, 48], 'PH': [83, 48],
-  'Thailand': [79, 47], 'TH': [79, 47],
-  'Vietnam': [80, 47], 'VN': [80, 47],
-  'Taiwan': [83, 42], 'TW': [83, 42],
-  'Russia': [70, 25], 'RU': [70, 25],
-  'Estonia': [55, 26], 'EE': [55, 26],
-  'Latvia': [55, 27], 'LV': [55, 27],
-  'Lithuania': [55, 28], 'LT': [55, 28],
-  'Hungary': [55, 32], 'HU': [55, 32],
-  'Croatia': [54, 33], 'HR': [54, 33],
-  'Chile': [28, 66], 'CL': [28, 66],
-  'Peru': [25, 57], 'PE': [25, 57],
-  'Egypt': [59, 42], 'EG': [59, 42],
-  'Morocco': [48, 39], 'MA': [48, 39],
-  'Pakistan': [72, 41], 'PK': [72, 41],
-  'Bangladesh': [77, 43], 'BD': [77, 43],
-  'Malaysia': [79, 52], 'MY': [79, 52],
-  'UAE': [67, 43], 'AE': [67, 43],
+  'Austria': [54.2, 18.3], 'AT': [54.2, 18.3],
+  'Germany': [53.3, 15.3], 'DE': [53.3, 15.3],
+  'Switzerland': [52.5, 17.8], 'CH': [52.5, 17.8],
+  'United States': [25, 25], 'US': [25, 25], 'USA': [25, 25],
+  'United Kingdom': [50, 16], 'UK': [50, 16], 'GB': [50, 16],
+  'France': [50.5, 19], 'FR': [50.5, 19],
+  'Netherlands': [52, 14.5], 'NL': [52, 14.5],
+  'Japan': [89, 25], 'JP': [89, 25],
+  'India': [71, 40], 'IN': [71, 40],
+  'Brazil': [37, 62], 'BR': [37, 62],
+  'Canada': [22, 14], 'CA': [22, 14],
+  'Australia': [91, 70], 'AU': [91, 70],
+  'Sweden': [52, 9], 'SE': [52, 9],
+  'Norway': [51, 7], 'NO': [51, 7],
+  'Finland': [54, 7], 'FI': [54, 7],
+  'Denmark': [52.5, 12.5], 'DK': [52.5, 12.5],
+  'Poland': [55.5, 15], 'PL': [55.5, 15],
+  'Spain': [49, 22], 'ES': [49, 22],
+  'Italy': [52.5, 22], 'IT': [52.5, 22],
+  'Portugal': [47, 22.5], 'PT': [47, 22.5],
+  'Belgium': [51.5, 16.5], 'BE': [51.5, 16.5],
+  'Czech Republic': [54.5, 16.5], 'CZ': [54.5, 16.5], 'Czechia': [54.5, 16.5],
+  'Ireland': [48, 15], 'IE': [48, 15],
+  'South Korea': [85.5, 24], 'KR': [85.5, 24],
+  'Singapore': [79, 50.5], 'SG': [79, 50.5],
+  'Israel': [59, 28], 'IL': [59, 28],
+  'China': [82, 24], 'CN': [82, 24],
+  'Mexico': [22, 36], 'MX': [22, 36],
+  'Argentina': [35, 73], 'AR': [35, 73],
+  'Colombia': [27, 48], 'CO': [27, 48],
+  'Romania': [57, 17.5], 'RO': [57, 17.5],
+  'Ukraine': [58, 14], 'UA': [58, 14],
+  'Turkey': [59.5, 21], 'TR': [59.5, 21],
+  'New Zealand': [97, 72], 'NZ': [97, 72],
+  'South Africa': [56, 73], 'ZA': [56, 73],
+  'Nigeria': [53, 46], 'NG': [53, 46],
+  'Kenya': [60, 50], 'KE': [60, 50],
+  'Indonesia': [82, 53], 'ID': [82, 53],
+  'Philippines': [87, 42], 'PH': [87, 42],
+  'Thailand': [79.5, 42], 'TH': [79.5, 42],
+  'Vietnam': [81.5, 40], 'VN': [81.5, 40],
+  'Taiwan': [87, 30], 'TW': [87, 30],
+  'Russia': [72, 10], 'RU': [72, 10],
+  'Estonia': [55, 10], 'EE': [55, 10],
+  'Hungary': [55, 17.5], 'HU': [55, 17.5],
+  'Croatia': [54.5, 19.5], 'HR': [54.5, 19.5],
+  'Chile': [33, 68], 'CL': [33, 68],
+  'Peru': [27, 56], 'PE': [27, 56],
+  'Egypt': [59, 32], 'EG': [59, 32],
+  'Pakistan': [73, 30], 'PK': [73, 30],
+  'UAE': [67, 33], 'AE': [67, 33],
+  'Malaysia': [79.5, 48], 'MY': [79.5, 48],
 }
 
-// Simplified world landmass as pixel-grid paths (low-res silhouettes)
-// Each continent is a set of filled rectangles on an 80x40 grid
-const PIXEL_SIZE = 12
-const GRID_W = 80
-const GRID_H = 40
+// Build the pixel map from geometric shapes
+function generateLandmass(): Set<string> {
+  const land = new Set<string>()
 
-// Continents as arrays of [x, y] grid cells
-const LANDMASS: Array<[number, number]> = [
-  // North America
-  ...[
-    [12,6],[13,6],[14,6],[15,6],[16,6],[17,6],
-    [10,7],[11,7],[12,7],[13,7],[14,7],[15,7],[16,7],[17,7],[18,7],
-    [9,8],[10,8],[11,8],[12,8],[13,8],[14,8],[15,8],[16,8],[17,8],[18,8],[19,8],
-    [8,9],[9,9],[10,9],[11,9],[12,9],[13,9],[14,9],[15,9],[16,9],[17,9],[18,9],
-    [9,10],[10,10],[11,10],[12,10],[13,10],[14,10],[15,10],[16,10],[17,10],
-    [10,11],[11,11],[12,11],[13,11],[14,11],[15,11],[16,11],
-    [11,12],[12,12],[13,12],[14,12],[15,12],[16,12],
-    [12,13],[13,13],[14,13],[15,13],
-    [13,14],[14,14],[15,14],
-    [13,15],[14,15],
-  ] as Array<[number, number]>,
-  // South America
-  ...[
-    [20,18],[21,18],[22,18],[23,18],
-    [19,19],[20,19],[21,19],[22,19],[23,19],[24,19],
-    [19,20],[20,20],[21,20],[22,20],[23,20],[24,20],
-    [19,21],[20,21],[21,21],[22,21],[23,21],[24,21],[25,21],
-    [20,22],[21,22],[22,22],[23,22],[24,22],[25,22],
-    [20,23],[21,23],[22,23],[23,23],[24,23],
-    [21,24],[22,24],[23,24],[24,24],
-    [22,25],[23,25],[24,25],
-    [22,26],[23,26],
-    [22,27],[23,27],
-    [23,28],
-  ] as Array<[number, number]>,
-  // Europe
-  ...[
-    [37,7],[38,7],[39,7],[40,7],[41,7],
-    [36,8],[37,8],[38,8],[39,8],[40,8],[41,8],[42,8],
-    [37,9],[38,9],[39,9],[40,9],[41,9],[42,9],[43,9],
-    [37,10],[38,10],[39,10],[40,10],[41,10],[42,10],[43,10],[44,10],
-    [38,11],[39,11],[40,11],[41,11],[42,11],[43,11],
-    [39,12],[40,12],[41,12],[42,12],
-    [39,13],[40,13],[41,13],
-  ] as Array<[number, number]>,
-  // Africa
-  ...[
-    [38,14],[39,14],[40,14],[41,14],[42,14],[43,14],
-    [37,15],[38,15],[39,15],[40,15],[41,15],[42,15],[43,15],[44,15],
-    [37,16],[38,16],[39,16],[40,16],[41,16],[42,16],[43,16],[44,16],[45,16],
-    [37,17],[38,17],[39,17],[40,17],[41,17],[42,17],[43,17],[44,17],[45,17],
-    [38,18],[39,18],[40,18],[41,18],[42,18],[43,18],[44,18],[45,18],
-    [38,19],[39,19],[40,19],[41,19],[42,19],[43,19],[44,19],
-    [39,20],[40,20],[41,20],[42,20],[43,20],[44,20],
-    [39,21],[40,21],[41,21],[42,21],[43,21],
-    [40,22],[41,22],[42,22],[43,22],
-    [40,23],[41,23],[42,23],
-    [41,24],[42,24],
-    [41,25],
-  ] as Array<[number, number]>,
-  // Asia
-  ...[
-    [43,6],[44,6],[45,6],[46,6],[47,6],[48,6],[49,6],[50,6],[51,6],[52,6],[53,6],[54,6],[55,6],[56,6],
-    [42,7],[43,7],[44,7],[45,7],[46,7],[47,7],[48,7],[49,7],[50,7],[51,7],[52,7],[53,7],[54,7],[55,7],[56,7],[57,7],[58,7],
-    [44,8],[45,8],[46,8],[47,8],[48,8],[49,8],[50,8],[51,8],[52,8],[53,8],[54,8],[55,8],[56,8],[57,8],[58,8],[59,8],[60,8],
-    [44,9],[45,9],[46,9],[47,9],[48,9],[49,9],[50,9],[51,9],[52,9],[53,9],[54,9],[55,9],[56,9],[57,9],[58,9],[59,9],[60,9],[61,9],
-    [45,10],[46,10],[47,10],[48,10],[49,10],[50,10],[51,10],[52,10],[53,10],[54,10],[55,10],[56,10],[57,10],[58,10],[59,10],[60,10],
-    [46,11],[47,11],[48,11],[49,11],[50,11],[51,11],[52,11],[53,11],[54,11],[55,11],[56,11],[57,11],[58,11],[59,11],
-    [48,12],[49,12],[50,12],[51,12],[52,12],[53,12],[54,12],[55,12],[56,12],[57,12],[58,12],
-    [50,13],[51,13],[52,13],[53,13],[54,13],[55,13],[56,13],[57,13],[58,13],
-    [52,14],[53,14],[54,14],[55,14],[56,14],[57,14],
-    [54,15],[55,15],[56,15],[57,15],
-    [55,16],[56,16],[57,16],
-    [56,17],[57,17],[58,17],
-    [57,18],[58,18],[59,18],
-    [58,19],[59,19],[60,19],
-  ] as Array<[number, number]>,
-  // Australia
-  ...[
-    [61,21],[62,21],[63,21],[64,21],[65,21],
-    [60,22],[61,22],[62,22],[63,22],[64,22],[65,22],[66,22],
-    [60,23],[61,23],[62,23],[63,23],[64,23],[65,23],[66,23],
-    [61,24],[62,24],[63,24],[64,24],[65,24],[66,24],
-    [61,25],[62,25],[63,25],[64,25],[65,25],
-    [62,26],[63,26],[64,26],
-  ] as Array<[number, number]>,
-]
+  function fill(x1: number, y1: number, x2: number, y2: number) {
+    for (let y = Math.max(0, y1); y <= Math.min(GRID_H - 1, y2); y++)
+      for (let x = Math.max(0, x1); x <= Math.min(GRID_W - 1, x2); x++)
+        land.add(`${x},${y}`)
+  }
+
+  function ellipse(cx: number, cy: number, rx: number, ry: number) {
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
+      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+        const dx = (x - cx) / rx, dy = (y - cy) / ry
+        if (dx * dx + dy * dy <= 1.0) land.add(`${x},${y}`)
+      }
+  }
+
+  function cut(x1: number, y1: number, x2: number, y2: number) {
+    for (let y = y1; y <= y2; y++)
+      for (let x = x1; x <= x2; x++)
+        land.delete(`${x},${y}`)
+  }
+
+  function cutEllipse(cx: number, cy: number, rx: number, ry: number) {
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
+      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+        const dx = (x - cx) / rx, dy = (y - cy) / ry
+        if (dx * dx + dy * dy <= 1.0) land.delete(`${x},${y}`)
+      }
+  }
+
+  // === NORTH AMERICA ===
+  fill(7, 4, 12, 8)       // Alaska
+  ellipse(22, 8, 12, 5)   // Canada
+  fill(14, 5, 34, 7)      // Northern Canada
+  fill(10, 4, 18, 6)      // NW Territories
+  ellipse(26, 14, 8, 4)   // USA main
+  fill(17, 12, 33, 16)    // USA
+  fill(18, 16, 30, 18)    // Southern US
+  fill(28, 14, 33, 18)    // US East coast
+  cut(31, 16, 34, 18)     // SE coast shape
+  fill(17, 17, 23, 19)    // Texas/Gulf
+  fill(18, 19, 22, 22)    // Mexico
+  fill(19, 22, 22, 24)    // Central America
+  fill(20, 24, 22, 26)    // Central America narrow
+  cut(24, 8, 26, 10)      // Hudson Bay
+  fill(35, 2, 40, 7)      // Greenland
+  fill(36, 1, 39, 8)      // Greenland
+
+  // === SOUTH AMERICA ===
+  fill(27, 27, 37, 30)    // Northern SA / Venezuela
+  fill(28, 30, 40, 33)    // Brazil north
+  fill(30, 33, 42, 36)    // Brazil central
+  fill(31, 36, 41, 38)    // Brazil south
+  fill(30, 38, 39, 40)    // Paraguay/Uruguay area
+  fill(29, 40, 37, 42)    // Argentina north
+  fill(29, 42, 35, 44)    // Argentina
+  fill(29, 44, 33, 46)    // Patagonia
+  fill(29, 46, 31, 47)    // Patagonia tip
+  cut(38, 27, 42, 30)     // Shape NE coast
+
+  // === EUROPE ===
+  fill(48, 9, 50, 12)     // UK/Ireland
+  fill(51, 8, 53, 12)     // UK
+  fill(52, 5, 54, 8)      // Norway/Sweden
+  fill(54, 4, 56, 9)      // Scandinavia
+  fill(57, 5, 59, 8)      // Finland
+  fill(50, 12, 58, 14)    // Western Europe belt
+  fill(55, 10, 62, 13)    // Central Europe
+  fill(58, 9, 64, 12)     // Eastern Europe
+  fill(64, 9, 68, 13)     // Eastern Europe / Baltics
+  fill(49, 14, 52, 17)    // Iberian peninsula
+  fill(53, 14, 57, 16)    // France south
+  fill(57, 14, 60, 16)    // Alps / N. Italy
+  fill(58, 16, 60, 19)    // Italy boot
+  fill(60, 14, 64, 17)    // Balkans
+  fill(61, 17, 63, 19)    // Greece
+  fill(63, 18, 66, 20)    // Turkey west
+
+  // === RUSSIA / CENTRAL ASIA ===
+  fill(58, 5, 80, 9)      // Russia west
+  fill(68, 4, 95, 8)      // Russia central
+  fill(80, 3, 100, 7)     // Siberia
+  fill(95, 4, 110, 8)     // Far east Russia
+  fill(100, 5, 112, 9)    // Russian far east
+  fill(68, 9, 90, 12)     // Russia south / Steppe
+  fill(75, 12, 85, 14)    // Central Asia
+  cut(108, 3, 115, 7)     // Shape far east coast
+  cut(95, 8, 100, 10)     // Baikal area shaping
+
+  // === MIDDLE EAST ===
+  fill(66, 18, 76, 22)    // Middle East
+  fill(68, 22, 74, 25)    // Arabian Peninsula
+  fill(67, 20, 70, 24)    // Arabia west
+  cut(71, 23, 73, 26)     // Persian Gulf
+  cut(64, 20, 66, 22)     // Mediterranean east
+
+  // === AFRICA ===
+  fill(47, 19, 62, 22)    // North Africa
+  fill(48, 22, 63, 26)    // Sahara/Sahel
+  fill(49, 26, 64, 30)    // West/Central Africa
+  fill(50, 30, 66, 34)    // Central Africa
+  fill(52, 34, 67, 38)    // East Africa
+  fill(54, 38, 66, 42)    // Southern Africa
+  fill(55, 42, 65, 44)    // South Africa
+  fill(57, 44, 63, 45)    // South Africa tip
+  cut(47, 25, 49, 30)     // Gulf of Guinea shape
+  fill(68, 34, 70, 38)    // Madagascar
+
+  // === INDIA ===
+  fill(76, 16, 80, 19)    // Pakistan/NW India
+  fill(78, 19, 84, 23)    // Northern India
+  fill(79, 23, 85, 27)    // Central India
+  fill(80, 27, 84, 30)    // Southern India
+  fill(81, 30, 83, 32)    // India tip
+  fill(84, 31, 85, 32)    // Sri Lanka
+
+  // === CHINA / EAST ASIA ===
+  fill(85, 12, 100, 16)   // China north
+  fill(83, 16, 100, 20)   // China central
+  fill(86, 20, 98, 23)    // China south
+  fill(90, 23, 96, 25)    // Southern China
+  fill(100, 13, 102, 17)  // Korea
+  fill(104, 12, 107, 16)  // Japan main
+  fill(105, 16, 107, 18)  // Japan south
+  fill(103, 10, 105, 13)  // Hokkaido
+
+  // === SOUTHEAST ASIA ===
+  fill(78, 25, 83, 28)    // Myanmar/Thailand
+  fill(80, 28, 84, 32)    // Malaysia peninsula
+  fill(82, 32, 84, 34)    // Malay tip
+  fill(83, 25, 87, 30)    // Vietnam/Laos/Cambodia
+  fill(86, 30, 89, 34)    // Philippines
+
+  // === INDONESIA ===
+  fill(80, 33, 86, 35)    // Sumatra
+  fill(82, 35, 90, 37)    // Java/Borneo
+  fill(87, 33, 94, 36)    // Borneo/Sulawesi
+  fill(90, 36, 98, 38)    // Lesser Sunda/Papua west
+  fill(96, 34, 102, 37)   // Papua
+
+  // === AUSTRALIA ===
+  fill(103, 38, 114, 42)  // Australia north
+  fill(102, 42, 115, 45)  // Australia central
+  fill(103, 45, 114, 47)  // Australia south
+  fill(105, 47, 112, 48)  // Australia bottom
+  cut(108, 38, 112, 40)   // Gulf of Carpentaria
+  cut(102, 46, 104, 48)   // Great Australian Bight shape
+
+  // === NEW ZEALAND ===
+  fill(116, 43, 117, 45)  // North Island
+  fill(115, 45, 117, 47)  // South Island
+
+  return land
+}
+
+interface CountryData {
+  countries: Record<string, number>
+}
 
 export function WorldMap() {
   const [countries, setCountries] = useState<Record<string, number>>({})
   const [total, setTotal] = useState(0)
+  const [hoveredCountry, setHoveredCountry] = useState<string | null>(null)
+
+  const landCells = useMemo(() => generateLandmass(), [])
 
   useEffect(() => {
     async function fetchCountries() {
       try {
         const res = await fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
-        const data = await res.json() as { countries: Record<string, number> }
+        const data = await res.json() as CountryData
         setCountries(data.countries)
         setTotal(Object.values(data.countries).reduce((a, b) => a + b, 0))
       } catch { /* noop */ }
@@ -166,14 +242,14 @@ export function WorldMap() {
     fetchCountries()
   }, [])
 
-  const svgW = GRID_W * PIXEL_SIZE
-  const svgH = GRID_H * PIXEL_SIZE
+  const svgW = GRID_W * PX
+  const svgH = GRID_H * PX
 
   return (
     <div className="world-map-page">
       <div className="map-header">
         <a href="/" className="back-link">← fire</a>
-        <span className="map-title">world map</span>
+        <span className="map-title">world</span>
         <span className="map-count">{total} {total === 1 ? 'Cici' : 'Cicis'}</span>
       </div>
 
@@ -183,42 +259,40 @@ export function WorldMap() {
           className="pixel-map"
           preserveAspectRatio="xMidYMid meet"
         >
-          {/* Grid background — very subtle */}
           <defs>
-            <pattern id="grid" width={PIXEL_SIZE} height={PIXEL_SIZE} patternUnits="userSpaceOnUse">
-              <rect width={PIXEL_SIZE} height={PIXEL_SIZE} fill="none" stroke="#1A1A2E" strokeWidth="0.5" opacity="0.3" />
-            </pattern>
-            {/* Glow filter for dots */}
-            <filter id="dot-glow">
-              <feGaussianBlur stdDeviation="3" result="blur" />
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="4" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
-            {/* Pulse animation */}
-            <radialGradient id="pulse-grad">
-              <stop offset="0%" stopColor="#E8572A" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="#E8572A" stopOpacity="0" />
-            </radialGradient>
           </defs>
 
           {/* Subtle grid */}
+          <defs>
+            <pattern id="grid" width={PX} height={PX} patternUnits="userSpaceOnUse">
+              <rect width={PX} height={PX} fill="none" stroke="#141425" strokeWidth="0.3" />
+            </pattern>
+          </defs>
           <rect width={svgW} height={svgH} fill="url(#grid)" />
 
-          {/* Landmass pixels */}
-          {LANDMASS.map(([x, y], i) => (
-            <rect
-              key={`land-${i}`}
-              x={x * PIXEL_SIZE}
-              y={y * PIXEL_SIZE}
-              width={PIXEL_SIZE}
-              height={PIXEL_SIZE}
-              fill="#1A1A2E"
-              stroke="#252540"
-              strokeWidth="0.5"
-            />
-          ))}
+          {/* Land pixels */}
+          {Array.from(landCells).map((key) => {
+            const [x, y] = key.split(',').map(Number)
+            return (
+              <rect
+                key={key}
+                x={x! * PX}
+                y={y! * PX}
+                width={PX}
+                height={PX}
+                fill="#1E1E35"
+                stroke="#252545"
+                strokeWidth="0.3"
+              />
+            )
+          })}
 
           {/* Country dots */}
           {Object.entries(countries).map(([country, count]) => {
@@ -226,28 +300,33 @@ export function WorldMap() {
             if (!pos) return null
             const cx = (pos[0] / 100) * svgW
             const cy = (pos[1] / 100) * svgH
-            const r = Math.max(4, Math.min(12, 4 + count * 2))
+            const r = Math.max(5, Math.min(14, 5 + count * 2))
+            const isHovered = hoveredCountry === country
 
             return (
-              <g key={country}>
-                {/* Pulse ring */}
-                <circle cx={cx} cy={cy} r={r * 3} fill="url(#pulse-grad)" className="pulse-ring" />
+              <g
+                key={country}
+                onMouseEnter={() => setHoveredCountry(country)}
+                onMouseLeave={() => setHoveredCountry(null)}
+                style={{ cursor: 'default' }}
+              >
+                {/* Outer pulse ring */}
+                <circle cx={cx} cy={cy} r={r * 3} fill="#E8572A" opacity={0.08} className="pulse-outer" />
+                <circle cx={cx} cy={cy} r={r * 2} fill="#E8572A" opacity={0.15} className="pulse-inner" />
                 {/* Dot */}
-                <circle cx={cx} cy={cy} r={r} fill="#E8572A" filter="url(#dot-glow)" />
-                {/* Count */}
+                <circle cx={cx} cy={cy} r={r} fill="#E8572A" filter="url(#glow)" />
+                {/* Count inside dot */}
                 {count > 1 && (
-                  <text
-                    x={cx}
-                    y={cy + 1}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fill="#0D0D1A"
-                    fontSize={r * 1.2}
-                    fontWeight="bold"
-                    fontFamily="monospace"
-                  >
-                    {count}
-                  </text>
+                  <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="central" fill="#0D0D1A" fontSize={r * 1.1} fontWeight="bold" fontFamily="monospace">{count}</text>
+                )}
+                {/* Tooltip */}
+                {isHovered && (
+                  <g>
+                    <rect x={cx - 40} y={cy - r - 22} width={80} height={18} fill="#0D0D1A" stroke="#E8572A" strokeWidth="1" />
+                    <text x={cx} y={cy - r - 10} textAnchor="middle" fill="#F5F0E8" fontSize="9" fontFamily="monospace">
+                      {country} · {count} {count === 1 ? 'Cici' : 'Cicis'}
+                    </text>
+                  </g>
                 )}
               </g>
             )
@@ -267,14 +346,12 @@ export function WorldMap() {
           display: flex;
           align-items: center;
           gap: 1.5rem;
-          padding: 1rem 1.5rem;
+          padding: 0.75rem 1.5rem;
           border-bottom: 1px solid #1A1A2E;
           font-size: 0.8rem;
+          flex-shrink: 0;
         }
-        .back-link {
-          color: #8A8A9A;
-          text-decoration: none;
-        }
+        .back-link { color: #8A8A9A; text-decoration: none; }
         .back-link:hover { color: #F5F0E8; }
         .map-title {
           color: #F5F0E8;
@@ -292,19 +369,27 @@ export function WorldMap() {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 1rem;
+          padding: 1rem 2rem;
         }
         .pixel-map {
           width: 100%;
           height: 100%;
-          max-width: 1200px;
+          max-height: calc(100vh - 50px);
         }
-        .pulse-ring {
-          animation: pulse 2s ease-in-out infinite;
+        .pulse-outer {
+          animation: pulse-out 2.5s ease-in-out infinite;
         }
-        @keyframes pulse {
-          0%, 100% { opacity: 0.4; transform-origin: center; }
-          50% { opacity: 0.8; }
+        .pulse-inner {
+          animation: pulse-in 2.5s ease-in-out infinite;
+          animation-delay: 0.3s;
+        }
+        @keyframes pulse-out {
+          0%, 100% { r: inherit; opacity: 0.05; }
+          50% { opacity: 0.12; }
+        }
+        @keyframes pulse-in {
+          0%, 100% { opacity: 0.1; }
+          50% { opacity: 0.25; }
         }
       `}</style>
     </div>

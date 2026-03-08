@@ -232,43 +232,26 @@ export function WorldMap() {
     }
   }, [])
 
-  // Build light data — each country becomes a cluster of tiny lights
-  // More agents = more lights + brighter, like earth at night
-  type Light = { x: number; y: number; count: number; name: string; delay: number; bright: number }
-  const lights: Light[] = []
-  const tooltipMap: Record<string, string[]> = {}
+  // One glow per unique grid position — concentric pixel-art light rings
+  // Bright center (yellow-white), warm middle (orange), faint outer (deep red)
+  type Glow = { cx: number; cy: number; count: number; delay: number; names: string[] }
+  const glows: Glow[] = []
+  const seen = new Set<string>()
 
   for (const [country, count] of Object.entries(countries)) {
     const pos = COUNTRY_POS[country]
     if (!pos) continue
+    const k = `${pos[0]},${pos[1]}`
     const cx = pos[0] * PX + PX / 2
     const cy = pos[1] * PX + PX / 2
-    const tk = `${pos[0]},${pos[1]}`
-    if (!tooltipMap[tk]) tooltipMap[tk] = []
-    tooltipMap[tk].push(`${country} · ${count}`)
-
-    // Brightness: log scale so 1→0.4, 10→0.65, 100→0.85, 287→1.0
-    const bright = Math.min(1, 0.35 + Math.log10(Math.max(1, count)) * 0.27)
-
-    // Main light
-    const hash0 = ((pos[0] * 7 + pos[1] * 13) % 17)
-    lights.push({ x: cx, y: cy, count, name: country, delay: hash0 * 0.2, bright })
-
-    // Extra scattered lights based on density
-    const extraCount = count > 100 ? 6 : count > 50 ? 4 : count > 20 ? 3 : count > 8 ? 2 : count > 3 ? 1 : 0
-    // Deterministic scatter offsets — small pixel offsets around the main point
-    const offsets: [number, number][] = [
-      [-5, -3], [4, -5], [-4, 4], [6, 3], [-2, -6], [3, 6], [7, -2], [-6, 1],
-    ]
-    for (let i = 0; i < extraCount; i++) {
-      const [ox, oy] = offsets[i % offsets.length]!
-      const hash = ((pos[0] * 31 + pos[1] * 17 + i * 7) % 23)
-      lights.push({
-        x: cx + ox, y: cy + oy,
-        count, name: country,
-        delay: hash * 0.15,
-        bright: bright * (0.5 + (hash % 5) * 0.1), // dimmer satellites
-      })
+    const existing = glows.find(g => g.cx === cx && g.cy === cy)
+    if (existing) {
+      existing.count += count
+      existing.names.push(`${country} · ${count}`)
+    } else {
+      const hash = ((pos[0] * 7 + pos[1] * 13) % 19)
+      glows.push({ cx, cy, count, delay: hash * 0.3, names: [`${country} · ${count}`] })
+      seen.add(k)
     }
   }
 
@@ -291,7 +274,7 @@ export function WorldMap() {
         >
           <rect x={0} y={0} width={svgW} height={svgH} fill={BG} />
 
-          {/* Land — no active region highlighting */}
+          {/* Land */}
           {cells.map(({ x, y, v }) => (
             <rect
               key={`${x},${y}`}
@@ -303,71 +286,75 @@ export function WorldMap() {
             />
           ))}
 
-          {/* Warm glow halos behind lights */}
-          {lights.map((l, i) => (
-            <rect
-              key={`g${i}`}
-              x={l.x - 4}
-              y={l.y - 4}
-              width={8}
-              height={8}
-              fill="#E8572A"
-              opacity={l.bright * 0.08}
-              className="wm-flicker"
-              style={{ animationDelay: `${l.delay + 0.5}s` }}
-              shapeRendering="auto"
-            />
-          ))}
+          {/* Agent glows — concentric pixel rings, like campfires seen from above */}
+          {glows.map((g, i) => {
+            // Intensity: log scale — 1→0.3, 10→0.55, 100→0.8, 287→1.0
+            const intensity = Math.min(1, 0.25 + Math.log10(Math.max(1, g.count)) * 0.3)
+            // Glow radius scales with intensity
+            const r3 = Math.round(6 + intensity * 8)  // outer glow radius
+            const r2 = Math.round(3 + intensity * 4)  // middle ring
+            const isH = hovered === `${i}`
 
-          {/* Light dots — tiny 2×2 pixel squares */}
-          {lights.map((l, i) => {
-            // Color: dim=deep orange, bright=warm yellow
-            const r = Math.round(232 + (255 - 232) * l.bright)
-            const g = Math.round(87 + (200 - 87) * l.bright * 0.6)
-            const b = Math.round(42 + (60 - 42) * l.bright * 0.3)
-            return (
-              <rect
-                key={`l${i}`}
-                x={l.x - 1}
-                y={l.y - 1}
-                width={2}
-                height={2}
-                fill={`rgb(${r},${g},${b})`}
-                className="wm-flicker"
-                style={{ animationDelay: `${l.delay}s` }}
-              />
-            )
-          })}
-
-          {/* Hover zones — invisible rects over each country position */}
-          {Object.entries(tooltipMap).map(([k, names]) => {
-            const [gx, gy] = k.split(',').map(Number)
-            const isH = hovered === k
-            const px = gx! * PX, py = gy! * PX
             return (
               <g
-                key={k}
-                onMouseEnter={() => setHovered(k)}
+                key={i}
+                onMouseEnter={() => setHovered(`${i}`)}
                 onMouseLeave={() => setHovered(null)}
-                style={{ cursor: 'default' }}
+                className="wm-glow"
+                style={{ cursor: 'default', animationDelay: `${g.delay}s` }}
               >
-                <rect x={px - 6} y={py - 6} width={PX + 12} height={PX + 12} fill="transparent" />
+                {/* Ring 3: outermost — very faint warm */}
+                <rect
+                  x={g.cx - r3} y={g.cy - r3}
+                  width={r3 * 2} height={r3 * 2}
+                  fill="#8B2500" opacity={intensity * 0.06}
+                  className="wm-shimmer"
+                  style={{ animationDelay: `${g.delay + 0.7}s` }}
+                />
+                {/* Ring 2: middle — warm orange */}
+                <rect
+                  x={g.cx - r2} y={g.cy - r2}
+                  width={r2 * 2} height={r2 * 2}
+                  fill="#E8572A" opacity={intensity * 0.12}
+                  className="wm-shimmer"
+                  style={{ animationDelay: `${g.delay + 0.3}s` }}
+                />
+                {/* Ring 1: inner — bright warm */}
+                <rect
+                  x={g.cx - 2} y={g.cy - 2}
+                  width={4} height={4}
+                  fill="#FF8C42" opacity={intensity * 0.35}
+                  className="wm-shimmer"
+                  style={{ animationDelay: `${g.delay}s` }}
+                />
+                {/* Core: 1×1 bright center — yellow to white based on intensity */}
+                <rect
+                  x={g.cx} y={g.cy}
+                  width={1} height={1}
+                  fill={intensity > 0.7 ? '#FFE4A0' : intensity > 0.4 ? '#FFBB66' : '#FF8844'}
+                  className="wm-shimmer"
+                  style={{ animationDelay: `${g.delay + 0.1}s` }}
+                />
+
+                {/* Hover hitbox */}
+                <rect x={g.cx - 8} y={g.cy - 8} width={16} height={16} fill="transparent" />
+
                 {isH && (
                   <g>
                     <rect
-                      x={px - 30}
-                      y={py - 12 * names.length - 6}
+                      x={g.cx - 30}
+                      y={g.cy - 12 * g.names.length - 8}
                       width={80}
-                      height={12 * names.length + 6}
+                      height={12 * g.names.length + 6}
                       fill={BG}
                       stroke="#1A1A2E"
                       strokeWidth={1}
                     />
-                    {names.map((n, i) => (
+                    {g.names.map((n, j) => (
                       <text
-                        key={i}
-                        x={px + 10}
-                        y={py - 12 * (names.length - i) + 2}
+                        key={j}
+                        x={g.cx + 10}
+                        y={g.cy - 12 * (g.names.length - j) + 2}
                         fill="#F5F0E8"
                         fontSize="7"
                         fontFamily="monospace"
@@ -391,8 +378,8 @@ export function WorldMap() {
         .wm-n{color:#8A8A9A!important;margin-left:auto;font-size:.7rem!important;text-transform:none!important}
         .wm-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:1rem}
         .wm-svg{width:100%;height:100%;max-width:${svgW}px}
-        .wm-flicker{animation:flicker 1.5s ease-in-out infinite alternate}
-        @keyframes flicker{0%{opacity:1}30%{opacity:.7}50%{opacity:1}70%{opacity:.5}100%{opacity:.9}}
+        .wm-shimmer{animation:shimmer 2.5s ease-in-out infinite alternate}
+        @keyframes shimmer{0%{opacity:var(--o,1)}25%{opacity:calc(var(--o,1)*0.6)}50%{opacity:var(--o,1)}75%{opacity:calc(var(--o,1)*0.75)}100%{opacity:calc(var(--o,1)*0.85)}}
       `}</style>
     </div>
   )

@@ -205,10 +205,57 @@ const FILLS: Record<number, string> = {
   3: '#222240',    // inland (slightly brighter)
 }
 
+// Body part regions for click detection
+const REGIONS: Array<{ name: string; cx: number; cy: number; r: number; desc: string }> = [
+  { name: 'The Head', cx: 38, cy: 50, r: 22, desc: 'Europe — where it all started' },
+  { name: 'Eye of the North', cx: 44, cy: 40, r: 6, desc: 'The northern lagoon. Good fishing.' },
+  { name: 'Eye of the South', cx: 44, cy: 60, r: 6, desc: 'The southern lagoon. Better fishing.' },
+  { name: 'The Neck', cx: 68, cy: 50, r: 12, desc: 'The narrow pass — Middle East & North Africa' },
+  { name: 'The Heart', cx: 100, cy: 50, r: 22, desc: 'The Americas — biggest landmass on the island' },
+  { name: 'The Belt', cx: 132, cy: 50, r: 12, desc: 'Africa — the crossroads' },
+  { name: 'North Ridge', cx: 155, cy: 39, r: 14, desc: 'Asia — the upper trail' },
+  { name: 'South Ridge', cx: 155, cy: 61, r: 14, desc: 'Oceania & SE Asia — the lower trail' },
+  { name: 'North Point', cx: 175, cy: 34, r: 9, desc: 'The northern foot — edge of the world' },
+  { name: 'South Point', cx: 175, cy: 66, r: 9, desc: 'The southern foot — here be dragons' },
+  { name: 'The Flame', cx: 14, cy: 50, r: 5, desc: 'The westernmost tip. The spark.' },
+]
+
+function findRegion(gx: number, gy: number): typeof REGIONS[number] | null {
+  let best: typeof REGIONS[number] | null = null
+  let bestDist = Infinity
+  for (const reg of REGIONS) {
+    const d = Math.sqrt((gx - reg.cx) ** 2 + (gy - reg.cy) ** 2)
+    if (d < reg.r && d < bestDist) { best = reg; bestDist = d }
+  }
+  return best
+}
+
+// Get unique countries in a region
+function countriesInRegion(reg: typeof REGIONS[number], countries: Record<string, number>): Array<{ name: string; count: number }> {
+  const result: Array<{ name: string; count: number }> = []
+  const seen = new Set<string>()
+  for (const [country, count] of Object.entries(countries)) {
+    if (seen.has(country)) continue
+    const pos = DOT[country]
+    if (!pos) continue
+    const d = Math.sqrt((pos[0] - reg.cx) ** 2 + (pos[1] - reg.cy) ** 2)
+    if (d < reg.r * 1.5) {
+      result.push({ name: country, count })
+      seen.add(country)
+      // Skip 2-letter aliases
+      for (const [alias, apos] of Object.entries(DOT)) {
+        if (apos[0] === pos[0] && apos[1] === pos[1]) seen.add(alias)
+      }
+    }
+  }
+  return result.sort((a, b) => b.count - a.count)
+}
+
 export function WorldMap() {
   const [countries, setCountries] = useState<Record<string, number>>({})
   const [total, setTotal] = useState(0)
   const [hovered, setHovered] = useState<string | null>(null)
+  const [selected, setSelected] = useState<typeof REGIONS[number] | null>(null)
   const cells = useMemo(buildIsland, [])
 
   useEffect(() => {
@@ -231,17 +278,52 @@ export function WorldMap() {
     dotCells[k].names.push(`${country} · ${count}`)
   }
 
+  function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    const svg = e.currentTarget
+    const rect = svg.getBoundingClientRect()
+    const svgX = ((e.clientX - rect.left) / rect.width) * (W * PX)
+    const svgY = ((e.clientY - rect.top) / rect.height) * (H * PX)
+    const gx = svgX / PX, gy = svgY / PX
+    const reg = findRegion(gx, gy)
+    setSelected(reg === selected ? null : reg)
+  }
+
   const svgW = W * PX, svgH = H * PX
+  const regionCountries = selected ? countriesInRegion(selected, countries) : []
 
   return (
     <div className="wm">
       <div className="wm-bar">
         <a href="/">← fire</a>
         <span>claude island</span>
+        {selected && <span className="wm-region" onClick={() => setSelected(null)}>✕ {selected.name}</span>}
         <span className="wm-n">{total} {total === 1 ? 'Cici' : 'Cicis'}</span>
       </div>
+
+      {/* Region detail panel */}
+      {selected && (
+        <div className="wm-panel">
+          <div className="wm-panel-title">{selected.name}</div>
+          <div className="wm-panel-desc">{selected.desc}</div>
+          {regionCountries.length > 0 ? (
+            <div className="wm-panel-list">
+              {regionCountries.map(c => (
+                <div key={c.name} className="wm-panel-row">
+                  <span className="wm-panel-dot" />
+                  <span>{c.name}</span>
+                  <span className="wm-panel-count">{c.count} {c.count === 1 ? 'Cici' : 'Cicis'}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="wm-panel-empty">No Cicis here yet. Be the first.</div>
+          )}
+        </div>
+      )}
+
       <div className="wm-wrap">
-        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="wm-svg" shapeRendering="crispEdges">
+        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="wm-svg" shapeRendering="crispEdges"
+          onClick={handleClick} style={{ cursor: 'pointer' }}>
           <defs>
             <filter id="glow">
               <feGaussianBlur stdDeviation="3" result="b" />
@@ -252,6 +334,15 @@ export function WorldMap() {
             <rect key={`${x},${y}`} x={x*PX} y={y*PX} width={PX+.5} height={PX+.5}
               fill={FILLS[v] ?? '#1E1E3A'} />
           ))}
+          {/* Selected region highlight */}
+          {selected && (
+            <circle
+              cx={selected.cx * PX} cy={selected.cy * PX} r={selected.r * PX}
+              fill="none" stroke="#E8572A" strokeWidth="1" opacity={0.3}
+              strokeDasharray="4 4" shapeRendering="auto"
+            />
+          )}
+
           {Object.entries(dotCells).map(([k, dot]) => {
             const [x, y] = k.split(',').map(Number)
             const cx = x!*PX+PX/2, cy = y!*PX+PX/2
@@ -280,8 +371,19 @@ export function WorldMap() {
         .wm-bar a{color:#8A8A9A;text-decoration:none}.wm-bar a:hover{color:#F5F0E8}
         .wm-bar span{color:#F5F0E8;text-transform:uppercase;letter-spacing:.15em;font-size:.75rem}
         .wm-n{color:#8A8A9A!important;margin-left:auto;font-size:.7rem!important;text-transform:none!important}
-        .wm-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:1rem 2rem}
+        .wm-region{color:#E8572A!important;cursor:pointer;font-size:.7rem!important;text-transform:none!important;letter-spacing:0!important}
+        .wm-region:hover{opacity:.7}
+        .wm-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:1rem 2rem;position:relative}
         .wm-svg{width:100%;height:100%;max-width:1400px}
+        .wm-panel{position:absolute;top:0;right:0;width:280px;height:100%;background:#0D0D1A;border-left:1px solid #1A1A2E;padding:1.5rem;overflow-y:auto;z-index:10;animation:slide-in .2s ease-out}
+        .wm-panel-title{font-size:1rem;color:#E8572A;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.1em}
+        .wm-panel-desc{font-size:.75rem;color:#8A8A9A;margin-bottom:1.5rem;line-height:1.5}
+        .wm-panel-list{display:flex;flex-direction:column;gap:.5rem}
+        .wm-panel-row{display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:#F5F0E8;padding:.4rem .5rem;background:#1A1A2E}
+        .wm-panel-dot{width:6px;height:6px;border-radius:50%;background:#E8572A;flex-shrink:0}
+        .wm-panel-count{margin-left:auto;color:#8A8A9A;font-size:.65rem}
+        .wm-panel-empty{font-size:.75rem;color:#8A8A9A;font-style:italic}
+        @keyframes slide-in{from{transform:translateX(100%)}to{transform:translateX(0)}}
         .wm-p1{animation:p1 2.5s ease-in-out infinite}
         .wm-p2{animation:p2 2.5s ease-in-out infinite .3s}
         @keyframes p1{0%,100%{opacity:.05}50%{opacity:.15}}

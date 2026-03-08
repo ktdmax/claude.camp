@@ -188,20 +188,48 @@ const COUNTRY_POS: Record<string, [number, number]> = {
   'Morocco':        [46, 28], 'MA': [46, 28],
 }
 
+// Simulated ~1000 agents — realistic global distribution
+const SIM_COUNTRIES: Record<string, number> = {
+  'United States': 287, 'United Kingdom': 82, 'Germany': 68, 'Canada': 52,
+  'France': 42, 'India': 38, 'Australia': 32, 'Netherlands': 26,
+  'Japan': 24, 'Brazil': 22, 'Sweden': 18, 'Poland': 17,
+  'Spain': 16, 'Italy': 15, 'South Korea': 14, 'Switzerland': 13,
+  'Austria': 12, 'China': 14, 'Ireland': 11, 'Belgium': 10,
+  'Denmark': 9, 'Norway': 9, 'Finland': 8, 'Czech Republic': 7,
+  'Portugal': 7, 'Ukraine': 7, 'Romania': 6, 'Turkey': 6,
+  'Israel': 8, 'Singapore': 7, 'Taiwan': 6, 'Thailand': 5,
+  'Vietnam': 4, 'Indonesia': 5, 'Philippines': 4, 'Mexico': 7,
+  'Argentina': 5, 'Colombia': 4, 'Nigeria': 3, 'Kenya': 3,
+  'South Africa': 5, 'New Zealand': 6, 'Malaysia': 4, 'Hungary': 4,
+  'Croatia': 3, 'Morocco': 2, 'Egypt': 3, 'UAE': 5,
+  'Pakistan': 3, 'Chile': 3, 'Peru': 2, 'Russia': 5,
+}
+
 export function WorldMap() {
   const [countries, setCountries] = useState<Record<string, number>>({})
   const [total, setTotal] = useState(0)
   const [hovered, setHovered] = useState<string | null>(null)
+  const [sim, setSim] = useState(false)
   const cells = useMemo(buildGrid, [])
 
   useEffect(() => {
-    fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
-      .then(r => r.json())
-      .then((d: { countries: Record<string, number> }) => {
-        setCountries(d.countries)
-        setTotal(Object.values(d.countries).reduce((a, b) => a + b, 0))
-      })
-      .catch(() => {})
+    // Check for ?sim query param
+    const params = new URLSearchParams(window.location.search)
+    const isSim = params.has('sim')
+    setSim(isSim)
+
+    if (isSim) {
+      setCountries(SIM_COUNTRIES)
+      setTotal(Object.values(SIM_COUNTRIES).reduce((a, b) => a + b, 0))
+    } else {
+      fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
+        .then(r => r.json())
+        .then((d: { countries: Record<string, number> }) => {
+          setCountries(d.countries)
+          setTotal(Object.values(d.countries).reduce((a, b) => a + b, 0))
+        })
+        .catch(() => {})
+    }
   }, [])
 
   // Build set of active grid positions

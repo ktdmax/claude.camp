@@ -270,36 +270,75 @@ type CiciProps = {
   traits: CiciTraits
   size?: number
   label?: string
+  animated?: boolean
+  animDelay?: number
 }
 
-export function Cici({ traits, size = PX, label }: CiciProps) {
+// Unique animation class index
+let ciciCounter = 0
+
+export function Cici({ traits, size = PX, label, animated = false, animDelay }: CiciProps) {
   const { grid, colors } = buildCiciGrid(traits)
   const w = grid[0]!.length * size
   const h = grid.length * size
 
+  // Unique delay per Cici for desynchronized animation
+  const delay = animDelay ?? (ciciCounter++ * 0.37 % 4)
+
+  // Find eye pixel positions for blink animation
+  const eyePixels: Array<{ x: number; y: number }> = []
+  grid.forEach((row, ry) => {
+    row.forEach((cell, cx) => {
+      if (cell === 2) eyePixels.push({ x: cx, y: ry })
+    })
+  })
+
   return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} shapeRendering="crispEdges">
-        {/* Aura glow */}
-        {traits.aura && (
-          <rect x={size - 1} y={size * 2 - 1} width={size * 11 + 2} height={size * 9 + 2}
-            fill="none" stroke={traits.aura} strokeWidth={1} opacity={0.5} />
-        )}
-        {grid.map((row, ry) =>
-          row.map((cell, cx) => {
-            if (cell === 0) return null
-            return (
-              <rect
-                key={`${cx},${ry}`}
-                x={cx * size}
-                y={ry * size}
-                width={size}
-                height={size}
-                fill={colors[cell] ?? '#FF00FF'}
-              />
-            )
-          })
-        )}
+    <div
+      className={animated ? 'cici-alive' : undefined}
+      style={{
+        display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+        ...(animated ? { animationDelay: `${delay}s` } as React.CSSProperties : {}),
+      }}
+    >
+      <svg width={w} height={h + (animated ? size : 0)} viewBox={`0 0 ${w} ${h + (animated ? size : 0)}`} shapeRendering="crispEdges">
+        <g className={animated ? 'cici-body' : undefined} style={animated ? { animationDelay: `${delay}s` } as React.CSSProperties : undefined}>
+          {/* Aura glow */}
+          {traits.aura && (
+            <rect x={size - 1} y={size * 2 - 1} width={size * 11 + 2} height={size * 9 + 2}
+              fill="none" stroke={traits.aura} strokeWidth={1} opacity={0.5} />
+          )}
+          {grid.map((row, ry) =>
+            row.map((cell, cx) => {
+              if (cell === 0) return null
+              // Eyes get blink animation class
+              const isEye = cell === 2
+              return (
+                <rect
+                  key={`${cx},${ry}`}
+                  x={cx * size}
+                  y={ry * size}
+                  width={size}
+                  height={size}
+                  fill={colors[cell] ?? '#FF00FF'}
+                  className={animated && isEye ? 'cici-eye' : undefined}
+                  style={animated && isEye ? { animationDelay: `${delay + 1.2}s` } as React.CSSProperties : undefined}
+                />
+              )
+            })
+          )}
+          {/* Legs get shuffle animation */}
+          {animated && (
+            <>
+              {/* Left leg pair shuffle */}
+              <rect className="cici-leg-l" style={{ animationDelay: `${delay}s` } as React.CSSProperties}
+                x={1 * size} y={(grid.length - 3) * size} width={2 * size} height={3 * size} fill="transparent" />
+              {/* Right leg pair shuffle */}
+              <rect className="cici-leg-r" style={{ animationDelay: `${delay + 0.2}s` } as React.CSSProperties}
+                x={(grid[0]!.length - 3) * size} y={(grid.length - 3) * size} width={2 * size} height={3 * size} fill="transparent" />
+            </>
+          )}
+        </g>
       </svg>
       {label && <span style={{ color: '#8A8A9A', fontSize: 10, fontFamily: 'monospace' }}>{label}</span>}
     </div>
@@ -315,7 +354,7 @@ export function CiciShowcaseV1() {
       </div>
       <div style={{ color: '#8A8A9A', fontSize: 11, fontFamily: 'monospace', marginBottom: 12 }}>{desc}</div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        {cicis.map((c, i) => <Cici key={i} traits={c.traits} label={c.label} />)}
+        {cicis.map((c, i) => <Cici key={i} traits={c.traits} label={c.label} animated animDelay={i * 0.4} />)}
       </div>
     </div>
   )
@@ -434,9 +473,9 @@ export function CiciShowcaseV1() {
             'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
             '42424242424242424242424242424242424242424242424242424242424242ff',
             'deadbeefcafebabe1234567890abcdef1234567890abcdef1234567890abcdef',
-          ].map(hash => (
+          ].map((hash, i) => (
             <div key={hash} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              <Cici traits={traitsFromHash(hash)} size={6} />
+              <Cici traits={traitsFromHash(hash)} size={6} animated animDelay={i * 0.6} />
               <span style={{ color: '#8A8A9A', fontSize: 8, fontFamily: 'monospace' }}>
                 {hash.slice(0, 8)}...
               </span>
@@ -445,6 +484,29 @@ export function CiciShowcaseV1() {
         </div>
       </div>
 
+      <style>{`
+        .cici-body {
+          animation: cici-bob 1.8s ease-in-out infinite;
+        }
+        @keyframes cici-bob {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-2px); }
+        }
+        .cici-eye {
+          animation: cici-blink 3.5s step-end infinite;
+        }
+        @keyframes cici-blink {
+          0%, 92%, 100% { opacity: 1; }
+          94%, 96% { opacity: 0; }
+        }
+        .cici-alive {
+          animation: cici-breathe 2.4s ease-in-out infinite;
+        }
+        @keyframes cici-breathe {
+          0%, 100% { transform: scaleY(1); }
+          50% { transform: scaleY(1.02); }
+        }
+      `}</style>
     </div>
   )
 }

@@ -1,228 +1,73 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 
-// Render at 80×50 (2x the base 40×25), PX=12 → 960×600
-const COLS = 80
-const ROWS = 50
-const PX = 12
+// Pixel size for the fire sprite
+const S = 4
 
-const BG = '#0D0D1A'
-
-// Heightmap noise — deterministic, multi-octave for terrain depth
-// Returns 0.0 to 1.0
-function noise2d(x: number, y: number, seed: number): number {
-  // Hash-based noise
-  const h = ((x * 374761 + y * 668265 + seed * 1013) >>> 0)
-  return (h % 10000) / 10000
-}
-
-function terrainHeight(x: number, y: number): number {
-  // Large rolling hills
-  const n1 = noise2d(Math.floor(x / 6), Math.floor(y / 6), 1)
-  // Medium texture
-  const n2 = noise2d(Math.floor(x / 3), Math.floor(y / 3), 2)
-  // Fine grain per pixel
-  const n3 = noise2d(x, y, 3)
-  // Combine: large dominates, fine adds grain
-  return n1 * 0.45 + n2 * 0.35 + n3 * 0.2
-}
-
-// Generate terrain color based on base value + heightmap noise
-// Creates deep valleys (near-black) and bright ridges (purple-blue)
-function pixelFill(x: number, y: number, value: number): string {
-  const h = terrainHeight(x, y)
-
-  // Base brightness per terrain type
-  // shelf=-2/-1 stays simple, land gets the heightmap treatment
-  if (value === -2) {
-    const b = 10 + Math.round(h * 6)
-    return `rgb(${b},${b},${b + 18})`
-  }
-  if (value === -1) {
-    const b = 13 + Math.round(h * 8)
-    return `rgb(${b},${b},${b + 22})`
-  }
-
-  // Coast (1): dark with slight warm tint — beach/rock feel
-  if (value === 1) {
-    const b = 14 + Math.round(h * 14)
-    return `rgb(${b + 2},${b},${b + 18})`
-  }
-
-  // Land (2): wide range — dark valleys to medium
-  if (value === 2) {
-    const b = 16 + Math.round(h * 24)
-    return `rgb(${b},${b},${b + 26})`
-  }
-
-  // Highland (3): widest range — deep dark to bright ridges
-  // This is where the Monkey Island magic happens
-  const b = 12 + Math.round(h * 40)
-  // Add slight purple/blue shift on bright pixels
-  const blue = b + 30 + Math.round(h * 12)
-  return `rgb(${b},${b + 1},${Math.min(100, blue)})`
-}
-
-// Base 40×25 Cici silhouette — upscaled 2x to 80×50 programmatically
-// 0=water, 1=coast, 2=land, 3=highland
-/* eslint-disable */
-const BASE: number[][] = [
-//  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9
-  [ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 0
-  [ 0,0,0,0,0,0,0,0,0,0,1,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,1,0,0,0,0,0,0,0,0,0,0], // 1  ears
-  [ 0,0,0,0,0,0,0,0,0,1,2,3,2,1,0,0,0,0,0,0,0,0,0,0,0,0,1,2,3,2,1,0,0,0,0,0,0,0,0,0], // 2  ears
-  [ 0,0,0,0,0,0,0,0,1,2,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,2,1,0,0,0,0,0,0,0,0], // 3  ears merge into body
-  [ 0,0,0,0,0,0,0,0,1,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,1,0,0,0,0,0,0,0,0], // 4  body
-  [ 0,0,0,0,0,0,0,1,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,1,0,0,0,0,0,0,0], // 5  body
-  [ 0,0,0,0,0,0,0,1,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,1,0,0,0,0,0,0,0], // 6  body
-  [ 0,0,0,0,0,0,0,1,2,3,3,3,3,3,0,0,3,3,3,3,3,3,3,3,0,0,3,3,3,3,3,2,1,0,0,0,0,0,0,0], // 7  eyes
-  [ 0,0,0,0,0,0,0,1,2,3,3,3,3,3,0,0,3,3,3,3,3,3,3,3,0,0,3,3,3,3,3,2,1,0,0,0,0,0,0,0], // 8  eyes
-  [ 0,0,0,0,0,0,0,1,2,3,3,3,3,3,0,0,3,3,3,3,3,3,3,3,0,0,3,3,3,3,3,2,2,1,2,1,0,0,0,0], // 9  eyes + arm
-  [ 0,0,0,0,0,0,0,1,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,3,2,1,0,0,0], // 10 arm
-  [ 0,0,0,0,0,0,0,1,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,1,2,1,0,0,0,0], // 11 arm end
-  [ 0,0,0,0,0,0,0,1,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,1,0,0,0,0,0,0,0], // 12 body
-  [ 0,0,0,0,0,0,0,0,1,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,1,0,0,0,0,0,0,0,0], // 13 body narrows
-  [ 0,0,0,0,0,0,0,0,1,2,3,3,2,1,2,3,3,2,1,0,0,0,1,2,3,3,2,1,2,3,2,1,0,0,0,0,0,0,0,0], // 14 legs separate
-  [ 0,0,0,0,0,0,0,0,0,1,2,3,2,0,1,2,3,2,1,0,0,0,1,2,3,2,0,0,1,2,2,1,0,0,0,0,0,0,0,0], // 15 legs
-  [ 0,0,0,0,0,0,0,0,0,1,2,3,2,0,1,2,3,2,1,0,0,0,0,1,2,1,0,0,1,2,2,1,0,0,0,0,0,0,0,0], // 16 legs
-  [ 0,0,0,0,0,0,0,0,0,1,2,3,2,0,0,1,2,1,0,0,0,0,0,1,2,1,0,0,1,2,2,1,0,0,0,0,0,0,0,0], // 17 legs narrow
-  [ 0,0,0,0,0,0,0,0,0,0,1,2,1,0,0,1,2,1,0,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0], // 18 legs end
-  [ 0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0], // 19 tips
-  [ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 20
-  [ 0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0], // 21 tiny islands
-  [ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 22
-  [ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 23
-  [ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // 24
+// Fire sprite — each frame is a 11×14 pixel art grid
+// 0=transparent, 1=dark red, 2=red, 3=orange, 4=yellow, 5=bright yellow, 6=brown (logs)
+const FIRE_FRAMES: number[][][] = [
+  [
+    [0,0,0,0,0,5,0,0,0,0,0],
+    [0,0,0,0,5,4,0,0,0,0,0],
+    [0,0,0,0,4,4,5,0,0,0,0],
+    [0,0,0,4,4,5,4,0,0,0,0],
+    [0,0,0,4,3,4,4,4,0,0,0],
+    [0,0,4,3,3,3,4,4,0,0,0],
+    [0,0,3,3,3,3,3,3,0,0,0],
+    [0,3,3,2,3,3,2,3,3,0,0],
+    [0,3,2,2,2,2,2,2,3,0,0],
+    [0,2,2,1,2,2,1,2,2,0,0],
+    [0,2,1,1,1,1,1,1,2,0,0],
+    [0,0,1,1,1,1,1,1,0,0,0],
+    [0,6,6,6,6,6,6,6,6,0,0],
+    [6,6,6,6,6,6,6,6,6,6,0],
+  ],
+  [
+    [0,0,0,0,0,0,5,0,0,0,0],
+    [0,0,0,0,0,5,4,0,0,0,0],
+    [0,0,0,0,4,5,4,0,0,0,0],
+    [0,0,0,0,4,4,5,4,0,0,0],
+    [0,0,0,4,4,3,4,4,0,0,0],
+    [0,0,3,4,3,3,3,4,0,0,0],
+    [0,0,3,3,3,3,3,3,0,0,0],
+    [0,3,3,3,2,3,3,2,3,0,0],
+    [0,3,2,2,2,2,2,2,3,0,0],
+    [0,2,2,1,2,2,1,2,2,0,0],
+    [0,2,1,1,1,1,1,1,2,0,0],
+    [0,0,1,1,1,1,1,1,0,0,0],
+    [0,6,6,6,6,6,6,6,6,0,0],
+    [6,6,6,6,6,6,6,6,6,6,0],
+  ],
+  [
+    [0,0,0,0,5,0,0,0,0,0,0],
+    [0,0,0,5,4,5,0,0,0,0,0],
+    [0,0,0,4,5,4,0,0,0,0,0],
+    [0,0,0,4,4,4,4,0,0,0,0],
+    [0,0,4,3,4,4,3,4,0,0,0],
+    [0,0,4,3,3,3,3,4,0,0,0],
+    [0,0,3,3,3,3,3,3,0,0,0],
+    [0,3,2,3,3,2,3,3,3,0,0],
+    [0,3,2,2,2,2,2,2,3,0,0],
+    [0,2,1,2,2,2,2,1,2,0,0],
+    [0,2,1,1,1,1,1,1,2,0,0],
+    [0,0,1,1,1,1,1,1,0,0,0],
+    [0,6,6,6,6,6,6,6,6,0,0],
+    [6,6,6,6,6,6,6,6,6,6,0],
+  ],
 ]
-/* eslint-enable */
 
-// Build 80×50 grid: upscale 2x, add shallow water shelf, add coastal noise
-function buildGrid(): Array<{ x: number; y: number; v: number }> {
-  // Scale 2x
-  const grid: number[][] = Array.from({ length: ROWS }, (_, y) =>
-    Array.from({ length: COLS }, (_, x) => {
-      const bx = Math.floor(x / 2), by = Math.floor(y / 2)
-      return (BASE[by]?.[bx]) ?? 0
-    })
-  )
-
-  // Seeded PRNG for organic edge noise
-  let seed = 424349
-  const rand = () => {
-    let t = seed += 0x6D2B79F5
-    t = Math.imul(t ^ t >>> 15, t | 1)
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61)
-    return ((t ^ t >>> 14) >>> 0) / 4294967296
-  }
-
-  // Add organic noise to coastline edges (randomly add/remove coast pixels)
-  for (let y = 1; y < ROWS - 1; y++) {
-    for (let x = 1; x < COLS - 1; x++) {
-      const v = grid[y]![x]!
-      if (v === 0) {
-        // Water pixel next to coast → sometimes add coast pixel
-        let adjLand = 0
-        for (let dy = -1; dy <= 1; dy++)
-          for (let dx = -1; dx <= 1; dx++)
-            if (grid[y + dy]?.[x + dx]! > 0) adjLand++
-        if (adjLand >= 2 && rand() < 0.15) grid[y]![x] = 1
-      } else if (v === 1 && rand() < 0.08) {
-        // Coast pixel → sometimes erode
-        let adjWater = 0
-        for (let dy = -1; dy <= 1; dy++)
-          for (let dx = -1; dx <= 1; dx++)
-            if ((grid[y + dy]?.[x + dx] ?? 0) === 0) adjWater++
-        if (adjWater >= 3) grid[y]![x] = 0
-      }
-    }
-  }
-
-  // Add shallow water shelf: -1 = inner shelf, -2 = outer shelf
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      if (grid[y]![x]! !== 0) continue
-      let minDist = 99
-      for (let dy = -4; dy <= 4; dy++) {
-        for (let dx = -4; dx <= 4; dx++) {
-          const ny = y + dy, nx = x + dx
-          if (ny >= 0 && ny < ROWS && nx >= 0 && nx < COLS && grid[ny]![nx]! > 0) {
-            const d = Math.abs(dx) + Math.abs(dy)
-            if (d < minDist) minDist = d
-          }
-        }
-      }
-      if (minDist <= 2) grid[y]![x] = -1       // inner shelf
-      else if (minDist <= 4) grid[y]![x] = -2   // outer shelf
-    }
-  }
-
-  // Convert to renderable cells
-  const cells: Array<{ x: number; y: number; v: number }> = []
-  for (let y = 0; y < ROWS; y++)
-    for (let x = 0; x < COLS; x++)
-      if (grid[y]![x]! !== 0) cells.push({ x, y, v: grid[y]![x]! })
-
-  return cells
+const FIRE_COLORS: Record<number, string> = {
+  1: '#6B1010',  // dark red / ember
+  2: '#C83218',  // red
+  3: '#E8572A',  // orange (accent color)
+  4: '#FF9933',  // yellow-orange
+  5: '#FFD466',  // bright yellow
+  6: '#3D2817',  // brown logs
 }
 
-// Country → [col, row] on the 80×50 grid (2x the base positions)
-const COUNTRY_POS: Record<string, [number, number]> = {
-  'Sweden':         [22, 4],  'SE': [22, 4],
-  'Norway':         [20, 3],  'NO': [20, 3],
-  'Japan':          [56, 4],  'JP': [56, 4],
-  'South Korea':    [56, 3],  'KR': [56, 3],
-  'United Kingdom': [20, 10], 'UK': [20, 10], 'GB': [20, 10],
-  'Ireland':        [18, 12], 'IE': [18, 12],
-  'France':         [24, 12], 'FR': [24, 12],
-  'Netherlands':    [22, 10], 'NL': [22, 10],
-  'Belgium':        [26, 10], 'BE': [26, 10],
-  'Spain':          [20, 16], 'ES': [20, 16],
-  'Portugal':       [18, 18], 'PT': [18, 18],
-  'Germany':        [34, 10], 'DE': [34, 10],
-  'Austria':        [36, 12], 'AT': [36, 12],
-  'Switzerland':    [32, 12], 'CH': [32, 12],
-  'Poland':         [38, 10], 'PL': [38, 10],
-  'Czech Republic': [36, 10], 'CZ': [36, 10], 'Czechia': [36, 10],
-  'Denmark':        [32, 8],  'DK': [32, 8],
-  'Italy':          [34, 16], 'IT': [34, 16],
-  'Hungary':        [40, 12], 'HU': [40, 12],
-  'Croatia':        [38, 16], 'HR': [38, 16],
-  'Romania':        [42, 16], 'RO': [42, 16],
-  'Finland':        [40, 8],  'FI': [40, 8],
-  'Ukraine':        [46, 12], 'UA': [46, 12],
-  'Russia':         [54, 10], 'RU': [54, 10],
-  'Turkey':         [44, 18], 'TR': [44, 18],
-  'United States':  [40, 20], 'US': [40, 20], 'USA': [40, 20],
-  'Canada':         [36, 20], 'CA': [36, 20],
-  'Mexico':         [32, 22], 'MX': [32, 22],
-  'Brazil':         [44, 24], 'BR': [44, 24],
-  'Argentina':      [40, 24], 'AR': [40, 24],
-  'Colombia':       [36, 24], 'CO': [36, 24],
-  'Israel':         [66, 20], 'IL': [66, 20],
-  'Egypt':          [68, 20], 'EG': [68, 20],
-  'UAE':            [70, 20], 'AE': [70, 20],
-  'India':          [54, 16], 'IN': [54, 16],
-  'China':          [56, 12], 'CN': [56, 12],
-  'Pakistan':       [54, 18], 'PK': [54, 18],
-  'Thailand':       [58, 16], 'TH': [58, 16],
-  'Vietnam':        [60, 16], 'VN': [60, 16],
-  'Taiwan':         [60, 12], 'TW': [60, 12],
-  'Philippines':    [60, 18], 'PH': [60, 18],
-  'Singapore':      [58, 20], 'SG': [58, 20],
-  'Malaysia':       [56, 20], 'MY': [56, 20],
-  'Indonesia':      [58, 24], 'ID': [58, 24],
-  'Nigeria':        [22, 30], 'NG': [22, 30],
-  'Kenya':          [24, 28], 'KE': [24, 28],
-  'South Africa':   [22, 34], 'ZA': [22, 34],
-  'Chile':          [32, 32], 'CL': [32, 32],
-  'Peru':           [30, 30], 'PE': [30, 30],
-  'Australia':      [48, 30], 'AU': [48, 30],
-  'New Zealand':    [58, 32], 'NZ': [58, 32],
-  'Morocco':        [46, 28], 'MA': [46, 28],
-}
-
-// Simulated ~1000 agents — realistic global distribution
+// Simulated ~1000 agents
 const SIM_COUNTRIES: Record<string, number> = {
   'United States': 287, 'United Kingdom': 82, 'Germany': 68, 'Canada': 52,
   'France': 42, 'India': 38, 'Australia': 32, 'Netherlands': 26,
@@ -239,181 +84,194 @@ const SIM_COUNTRIES: Record<string, number> = {
   'Pakistan': 3, 'Chile': 3, 'Peru': 2, 'Russia': 5,
 }
 
+type Spark = {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  life: number
+  maxLife: number
+  size: number
+  hue: number // 0=red, 1=orange, 2=yellow
+}
+
+function createSpark(cx: number, cy: number): Spark {
+  const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.8  // mostly upward, wide spread
+  const speed = 0.3 + Math.random() * 0.8
+  const maxLife = 120 + Math.random() * 200
+  return {
+    x: cx + (Math.random() - 0.5) * 20,
+    y: cy - 10 + Math.random() * 6,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    life: Math.random() * maxLife,  // stagger initial spawns
+    maxLife,
+    size: Math.random() > 0.7 ? 2 : 1,
+    hue: Math.floor(Math.random() * 3),
+  }
+}
+
 export function WorldMap() {
-  const [countries, setCountries] = useState<Record<string, number>>({})
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const [total, setTotal] = useState(0)
-  const [hovered, setHovered] = useState<string | null>(null)
-  const [sim, setSim] = useState(false)
-  const cells = useMemo(buildGrid, [])
+  const sparksRef = useRef<Spark[]>([])
+  const frameRef = useRef(0)
+  const targetCountRef = useRef(0)
 
   useEffect(() => {
-    // Check for ?sim query param
     const params = new URLSearchParams(window.location.search)
     const isSim = params.has('sim')
-    setSim(isSim)
 
     if (isSim) {
-      setCountries(SIM_COUNTRIES)
-      setTotal(Object.values(SIM_COUNTRIES).reduce((a, b) => a + b, 0))
+      const t = Object.values(SIM_COUNTRIES).reduce((a, b) => a + b, 0)
+      setTotal(t)
+      targetCountRef.current = t
     } else {
       fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
         .then(r => r.json())
         .then((d: { countries: Record<string, number> }) => {
-          setCountries(d.countries)
-          setTotal(Object.values(d.countries).reduce((a, b) => a + b, 0))
+          const t = Object.values(d.countries).reduce((a, b) => a + b, 0)
+          setTotal(t)
+          targetCountRef.current = Math.max(t, 1)
         })
-        .catch(() => {})
+        .catch(() => { targetCountRef.current = 1; setTotal(1) })
     }
   }, [])
 
-  // One glow per unique grid position — concentric pixel-art light rings
-  // Bright center (yellow-white), warm middle (orange), faint outer (deep red)
-  type Glow = { cx: number; cy: number; count: number; delay: number; names: string[] }
-  const glows: Glow[] = []
-  const seen = new Set<string>()
+  const animate = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
 
-  for (const [country, count] of Object.entries(countries)) {
-    const pos = COUNTRY_POS[country]
-    if (!pos) continue
-    const k = `${pos[0]},${pos[1]}`
-    const cx = pos[0] * PX + PX / 2
-    const cy = pos[1] * PX + PX / 2
-    const existing = glows.find(g => g.cx === cx && g.cy === cy)
-    if (existing) {
-      existing.count += count
-      existing.names.push(`${country} · ${count}`)
-    } else {
-      const hash = ((pos[0] * 7 + pos[1] * 13) % 19)
-      glows.push({ cx, cy, count, delay: hash * 0.3, names: [`${country} · ${count}`] })
-      seen.add(k)
+    const w = canvas.width
+    const h = canvas.height
+    const fireCx = w / 2
+    const fireCy = h * 0.55
+
+    // Clear
+    ctx.fillStyle = '#0D0D1A'
+    ctx.fillRect(0, 0, w, h)
+
+    // Draw fire sprite
+    const frame = FIRE_FRAMES[Math.floor(frameRef.current / 8) % FIRE_FRAMES.length]!
+    const fireW = frame[0]!.length
+    const fireH = frame.length
+    const fireX = Math.floor(fireCx - (fireW * S) / 2)
+    const fireY = Math.floor(fireCy - (fireH * S) / 2)
+
+    for (let fy = 0; fy < fireH; fy++) {
+      for (let fx = 0; fx < fireW; fx++) {
+        const v = frame[fy]![fx]!
+        if (v === 0) continue
+        // Add subtle flicker to flame pixels (not logs)
+        let color = FIRE_COLORS[v]!
+        if (v >= 3 && v <= 5 && Math.random() < 0.15) {
+          // Random brightness flicker
+          const brighter = FIRE_COLORS[Math.min(5, v + 1)]!
+          color = brighter
+        }
+        ctx.fillStyle = color
+        ctx.fillRect(fireX + fx * S, fireY + fy * S, S, S)
+      }
     }
-  }
 
-  const svgW = COLS * PX
-  const svgH = ROWS * PX
+    // Draw subtle ground glow under fire
+    ctx.fillStyle = 'rgba(232, 87, 42, 0.03)'
+    ctx.fillRect(fireCx - 80, fireCy + fireH * S / 2 - 4, 160, 8)
+    ctx.fillStyle = 'rgba(232, 87, 42, 0.015)'
+    ctx.fillRect(fireCx - 120, fireCy + fireH * S / 2 + 4, 240, 6)
+
+    // Manage sparks — target count
+    const target = targetCountRef.current
+    while (sparksRef.current.length < target) {
+      sparksRef.current.push(createSpark(fireCx, fireCy))
+    }
+    // Trim excess if needed
+    if (sparksRef.current.length > target) {
+      sparksRef.current.length = target
+    }
+
+    // Update & draw sparks
+    const sparkColors = [
+      ['#FF4422', '#CC2211', '#881100'],  // red
+      ['#FF8833', '#E8572A', '#AA3318'],  // orange
+      ['#FFCC44', '#FFAA22', '#CC7711'],  // yellow
+    ]
+
+    for (const spark of sparksRef.current) {
+      spark.life++
+      if (spark.life >= spark.maxLife) {
+        // Respawn
+        Object.assign(spark, createSpark(fireCx, fireCy))
+        spark.life = 0
+      }
+
+      // Physics: drift up, slow down, slight wobble
+      spark.x += spark.vx + (Math.random() - 0.5) * 0.15
+      spark.y += spark.vy
+      spark.vy *= 0.998 // slight deceleration
+      spark.vx *= 0.995
+
+      // Fade: bright at start, dim at end
+      const t = spark.life / spark.maxLife
+      const alpha = t < 0.1 ? t * 10 : t > 0.7 ? (1 - t) / 0.3 : 1
+
+      if (alpha <= 0.02) continue
+
+      // Color based on life phase: yellow → orange → red → fade
+      const colors = sparkColors[spark.hue]!
+      const colorIdx = t < 0.3 ? 0 : t < 0.6 ? 1 : 2
+      ctx.globalAlpha = alpha * (0.6 + Math.random() * 0.4) // flicker
+      ctx.fillStyle = colors[colorIdx]!
+      ctx.fillRect(
+        Math.floor(spark.x),
+        Math.floor(spark.y),
+        spark.size,
+        spark.size,
+      )
+    }
+
+    ctx.globalAlpha = 1
+
+    frameRef.current++
+    requestAnimationFrame(animate)
+  }, [])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const resize = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight - 40
+    }
+    resize()
+    window.addEventListener('resize', resize)
+
+    const raf = requestAnimationFrame(animate)
+
+    return () => {
+      window.removeEventListener('resize', resize)
+      cancelAnimationFrame(raf)
+    }
+  }, [animate])
 
   return (
     <div className="wm">
       <div className="wm-bar">
         <a href="/">← fire</a>
-        <span>claude island</span>
+        <span>sparks</span>
         <span className="wm-n">{total} {total === 1 ? 'Cici' : 'Cicis'}</span>
       </div>
-
-      <div className="wm-wrap">
-        <svg
-          viewBox={`0 0 ${svgW} ${svgH}`}
-          className="wm-svg"
-          shapeRendering="crispEdges"
-        >
-          <rect x={0} y={0} width={svgW} height={svgH} fill={BG} />
-
-          {/* Land */}
-          {cells.map(({ x, y, v }) => (
-            <rect
-              key={`${x},${y}`}
-              x={x * PX}
-              y={y * PX}
-              width={PX}
-              height={PX}
-              fill={pixelFill(x, y, v)}
-            />
-          ))}
-
-          {/* Agent glows — concentric pixel rings, like campfires seen from above */}
-          {glows.map((g, i) => {
-            // Intensity: log scale — 1→0.3, 10→0.55, 100→0.8, 287→1.0
-            const intensity = Math.min(1, 0.25 + Math.log10(Math.max(1, g.count)) * 0.3)
-            // Glow radius scales with intensity
-            const r3 = Math.round(6 + intensity * 8)  // outer glow radius
-            const r2 = Math.round(3 + intensity * 4)  // middle ring
-            const isH = hovered === `${i}`
-
-            return (
-              <g
-                key={i}
-                onMouseEnter={() => setHovered(`${i}`)}
-                onMouseLeave={() => setHovered(null)}
-                className="wm-glow"
-                style={{ cursor: 'default', animationDelay: `${g.delay}s` }}
-              >
-                {/* Ring 3: outermost — very faint warm */}
-                <rect
-                  x={g.cx - r3} y={g.cy - r3}
-                  width={r3 * 2} height={r3 * 2}
-                  fill="#8B2500" opacity={intensity * 0.06}
-                  className="wm-shimmer"
-                  style={{ animationDelay: `${g.delay + 0.7}s` }}
-                />
-                {/* Ring 2: middle — warm orange */}
-                <rect
-                  x={g.cx - r2} y={g.cy - r2}
-                  width={r2 * 2} height={r2 * 2}
-                  fill="#E8572A" opacity={intensity * 0.12}
-                  className="wm-shimmer"
-                  style={{ animationDelay: `${g.delay + 0.3}s` }}
-                />
-                {/* Ring 1: inner — bright warm */}
-                <rect
-                  x={g.cx - 2} y={g.cy - 2}
-                  width={4} height={4}
-                  fill="#FF8C42" opacity={intensity * 0.35}
-                  className="wm-shimmer"
-                  style={{ animationDelay: `${g.delay}s` }}
-                />
-                {/* Core: 1×1 bright center — yellow to white based on intensity */}
-                <rect
-                  x={g.cx} y={g.cy}
-                  width={1} height={1}
-                  fill={intensity > 0.7 ? '#FFE4A0' : intensity > 0.4 ? '#FFBB66' : '#FF8844'}
-                  className="wm-shimmer"
-                  style={{ animationDelay: `${g.delay + 0.1}s` }}
-                />
-
-                {/* Hover hitbox */}
-                <rect x={g.cx - 8} y={g.cy - 8} width={16} height={16} fill="transparent" />
-
-                {isH && (
-                  <g>
-                    <rect
-                      x={g.cx - 30}
-                      y={g.cy - 12 * g.names.length - 8}
-                      width={80}
-                      height={12 * g.names.length + 6}
-                      fill={BG}
-                      stroke="#1A1A2E"
-                      strokeWidth={1}
-                    />
-                    {g.names.map((n, j) => (
-                      <text
-                        key={j}
-                        x={g.cx + 10}
-                        y={g.cy - 12 * (g.names.length - j) + 2}
-                        fill="#F5F0E8"
-                        fontSize="7"
-                        fontFamily="monospace"
-                        shapeRendering="auto"
-                      >
-                        {n}
-                      </text>
-                    ))}
-                  </g>
-                )}
-              </g>
-            )
-          })}
-        </svg>
-      </div>
+      <canvas ref={canvasRef} className="wm-canvas" />
       <style>{`
-        .wm{height:100vh;display:flex;flex-direction:column;background:${BG};overflow:hidden}
-        .wm-bar{display:flex;align-items:center;gap:1.5rem;padding:.75rem 1.5rem;border-bottom:1px solid #1A1A2E;font-size:.8rem;flex-shrink:0}
+        .wm{height:100vh;display:flex;flex-direction:column;background:#0D0D1A;overflow:hidden}
+        .wm-bar{display:flex;align-items:center;gap:1.5rem;padding:.75rem 1.5rem;border-bottom:1px solid #1A1A2E;font-size:.8rem;flex-shrink:0;z-index:1}
         .wm-bar a{color:#8A8A9A;text-decoration:none}.wm-bar a:hover{color:#F5F0E8}
         .wm-bar span{color:#F5F0E8;text-transform:uppercase;letter-spacing:.15em;font-size:.75rem}
         .wm-n{color:#8A8A9A!important;margin-left:auto;font-size:.7rem!important;text-transform:none!important}
-        .wm-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:1rem}
-        .wm-svg{width:100%;height:100%;max-width:${svgW}px}
-        .wm-shimmer{animation:shimmer 2.5s ease-in-out infinite alternate}
-        @keyframes shimmer{0%{opacity:var(--o,1)}25%{opacity:calc(var(--o,1)*0.6)}50%{opacity:var(--o,1)}75%{opacity:calc(var(--o,1)*0.75)}100%{opacity:calc(var(--o,1)*0.85)}}
+        .wm-canvas{flex:1;display:block;image-rendering:pixelated}
       `}</style>
     </div>
   )

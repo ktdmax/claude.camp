@@ -274,36 +274,109 @@ type CiciProps = {
   animDelay?: number
 }
 
-// Unique animation class index
 let ciciCounter = 0
 
+// Build animation frames from base grid: blink, bob, ear twitch
+function buildFrames(grid: number[][]): number[][][] {
+  const clone = () => grid.map(r => [...r])
+
+  // Frame 0: normal
+  const f0 = clone()
+
+  // Frame 1: bob down (shift grid down 1 row, top row = transparent)
+  const f1 = clone()
+  for (let y = grid.length - 1; y > 0; y--) f1[y] = [...grid[y - 1]!]
+  f1[0] = new Array(grid[0]!.length).fill(0)
+
+  // Frame 2: blink (eyes become body)
+  const f2 = clone()
+  for (let y = 0; y < f2.length; y++)
+    for (let x = 0; x < f2[y]!.length; x++)
+      if (f2[y]![x] === 2) f2[y]![x] = 1
+
+  // Frame 3: ear twitch (shift left ear pixels right by 1)
+  const f3 = clone()
+  for (let y = 0; y < 2; y++) {
+    for (let x = grid[0]!.length - 1; x > 0; x--) {
+      if (f3[y]![x - 1] === 3 && f3[y]![x] === 0) {
+        f3[y]![x] = 3; f3[y]![x - 1] = 0; break
+      }
+    }
+  }
+
+  // Frame 4: legs shuffle (inner legs swap 1px)
+  const f4 = clone()
+  for (let y = grid.length - 4; y < grid.length; y++) {
+    const row = f4[y]!
+    // Find leg pixels and shift inner ones
+    for (let x = 1; x < row.length - 1; x++) {
+      if (row[x] === 4 && row[x + 1] === 0) {
+        row[x] = 0; row[x + 1] = 4; x += 2
+      }
+    }
+  }
+
+  return [f0, f0, f0, f0, f1, f0, f0, f0, f0, f0, f2, f2, f0, f0, f0, f3, f0, f0, f4, f0]
+}
+
 export function Cici({ traits, size = PX, label, animated = false, animDelay }: CiciProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const { grid, colors } = buildCiciGrid(traits)
-  const w = grid[0]!.length * size
-  const h = grid.length * size
 
-  // Unique delay per Cici for desynchronized animation
-  const delay = animDelay ?? (ciciCounter++ * 0.37 % 4)
+  const w = grid[0]!.length
+  const h = grid.length
+  const pw = w * size
+  const ph = h * size
 
-  // Find eye pixel positions for blink animation
-  const eyePixels: Array<{ x: number; y: number }> = []
-  grid.forEach((row, ry) => {
-    row.forEach((cell, cx) => {
-      if (cell === 2) eyePixels.push({ x: cx, y: ry })
-    })
-  })
+  const phase = animDelay ?? (ciciCounter++ * 2.3 % 7)
 
-  return (
-    <div
-      className={animated ? 'cici-alive' : undefined}
-      style={{
-        display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-        ...(animated ? { animationDelay: `${delay}s` } as React.CSSProperties : {}),
-      }}
-    >
-      <svg width={w} height={h + (animated ? size : 0)} viewBox={`0 0 ${w} ${h + (animated ? size : 0)}`} shapeRendering="crispEdges">
-        <g className={animated ? 'cici-body' : undefined} style={animated ? { animationDelay: `${delay}s` } as React.CSSProperties : undefined}>
-          {/* Aura glow */}
+  useEffect(() => {
+    if (!animated) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const frames = buildFrames(grid)
+    let frameIdx = Math.floor(phase * 3) % frames.length
+    let tick = 0
+
+    const interval = setInterval(() => {
+      tick++
+      frameIdx = (frameIdx + 1) % frames.length
+
+      const frame = frames[frameIdx]!
+      ctx.clearRect(0, 0, pw, ph)
+
+      for (let ry = 0; ry < frame.length; ry++) {
+        for (let cx = 0; cx < frame[ry]!.length; cx++) {
+          const cell = frame[ry]![cx]!
+          if (cell === 0) continue
+          ctx.fillStyle = colors[cell] ?? '#FF00FF'
+          ctx.fillRect(cx * size, ry * size, size, size)
+        }
+      }
+    }, 150)
+
+    // Draw initial frame
+    const frame = frames[frameIdx]!
+    for (let ry = 0; ry < frame.length; ry++) {
+      for (let cx = 0; cx < frame[ry]!.length; cx++) {
+        const cell = frame[ry]![cx]!
+        if (cell === 0) continue
+        ctx.fillStyle = colors[cell] ?? '#FF00FF'
+        ctx.fillRect(cx * size, ry * size, size, size)
+      }
+    }
+
+    return () => clearInterval(interval)
+  }, [animated, grid, colors, size, pw, ph, phase])
+
+  // Static SVG for non-animated
+  if (!animated) {
+    return (
+      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        <svg width={pw} height={ph} viewBox={`0 0 ${pw} ${ph}`} shapeRendering="crispEdges">
           {traits.aura && (
             <rect x={size - 1} y={size * 2 - 1} width={size * 11 + 2} height={size * 9 + 2}
               fill="none" stroke={traits.aura} strokeWidth={1} opacity={0.5} />
@@ -311,35 +384,23 @@ export function Cici({ traits, size = PX, label, animated = false, animDelay }: 
           {grid.map((row, ry) =>
             row.map((cell, cx) => {
               if (cell === 0) return null
-              // Eyes get blink animation class
-              const isEye = cell === 2
               return (
-                <rect
-                  key={`${cx},${ry}`}
-                  x={cx * size}
-                  y={ry * size}
-                  width={size}
-                  height={size}
-                  fill={colors[cell] ?? '#FF00FF'}
-                  className={animated && isEye ? 'cici-eye' : undefined}
-                  style={animated && isEye ? { animationDelay: `${delay + 1.2}s` } as React.CSSProperties : undefined}
-                />
+                <rect key={`${cx},${ry}`} x={cx * size} y={ry * size}
+                  width={size} height={size} fill={colors[cell] ?? '#FF00FF'} />
               )
             })
           )}
-          {/* Legs get shuffle animation */}
-          {animated && (
-            <>
-              {/* Left leg pair shuffle */}
-              <rect className="cici-leg-l" style={{ animationDelay: `${delay}s` } as React.CSSProperties}
-                x={1 * size} y={(grid.length - 3) * size} width={2 * size} height={3 * size} fill="transparent" />
-              {/* Right leg pair shuffle */}
-              <rect className="cici-leg-r" style={{ animationDelay: `${delay + 0.2}s` } as React.CSSProperties}
-                x={(grid[0]!.length - 3) * size} y={(grid.length - 3) * size} width={2 * size} height={3 * size} fill="transparent" />
-            </>
-          )}
-        </g>
-      </svg>
+        </svg>
+        {label && <span style={{ color: '#8A8A9A', fontSize: 10, fontFamily: 'monospace' }}>{label}</span>}
+      </div>
+    )
+  }
+
+  // Canvas for animated
+  return (
+    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <canvas ref={canvasRef} width={pw} height={ph}
+        style={{ width: pw, height: ph, imageRendering: 'pixelated' }} />
       {label && <span style={{ color: '#8A8A9A', fontSize: 10, fontFamily: 'monospace' }}>{label}</span>}
     </div>
   )
@@ -484,29 +545,6 @@ export function CiciShowcaseV1() {
         </div>
       </div>
 
-      <style>{`
-        .cici-body {
-          animation: cici-bob 1.8s ease-in-out infinite;
-        }
-        @keyframes cici-bob {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-2px); }
-        }
-        .cici-eye {
-          animation: cici-blink 3.5s step-end infinite;
-        }
-        @keyframes cici-blink {
-          0%, 92%, 100% { opacity: 1; }
-          94%, 96% { opacity: 0; }
-        }
-        .cici-alive {
-          animation: cici-breathe 2.4s ease-in-out infinite;
-        }
-        @keyframes cici-breathe {
-          0%, 100% { transform: scaleY(1); }
-          50% { transform: scaleY(1.02); }
-        }
-      `}</style>
     </div>
   )
 }
@@ -541,9 +579,9 @@ export function CiciShowcaseV2() {
           same agents, front-view style
         </div>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-          {hashes.map(hash => (
+          {hashes.map((hash, i) => (
             <div key={hash} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              <Cici traits={traitsFromHash(hash)} size={5} />
+              <Cici traits={traitsFromHash(hash)} size={5} animated animDelay={i * 0.8} />
               <span style={{ color: '#8A8A9A', fontSize: 8, fontFamily: 'monospace' }}>{hash.slice(0, 8)}...</span>
             </div>
           ))}

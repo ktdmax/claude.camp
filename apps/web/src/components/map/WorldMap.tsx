@@ -117,6 +117,7 @@ export function WorldMap() {
   const sparksRef = useRef<Spark[]>([])
   const frameRef = useRef(0)
   const targetCountRef = useRef(0)
+  const centerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -243,8 +244,22 @@ export function WorldMap() {
     if (!canvas) return
 
     const resize = () => {
+      const oldCx = centerRef.current.x
+      const oldCy = centerRef.current.y
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight - 40
+      const newCx = canvas.width / 2
+      const newCy = canvas.height * 0.55
+      // Shift all existing sparks by the delta so they don't jump
+      if (oldCx !== 0 || oldCy !== 0) {
+        const dx = newCx - oldCx
+        const dy = newCy - oldCy
+        for (const s of sparksRef.current) {
+          s.x += dx
+          s.y += dy
+        }
+      }
+      centerRef.current = { x: newCx, y: newCy }
     }
     resize()
     window.addEventListener('resize', resize)

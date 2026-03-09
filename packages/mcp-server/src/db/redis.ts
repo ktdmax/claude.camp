@@ -15,14 +15,15 @@ const RESULT_HASH_TTL = 604800 // 7 days
 
 export async function setPresence(redis: Redis, agentId: string): Promise<void> {
   await redis.set(`presence:${agentId}`, '1', { ex: PRESENCE_TTL })
+  // SECURITY: Track online agents in a SET instead of using KEYS (H5)
+  await redis.sadd('presence:online', agentId)
 }
 
+// SECURITY: Atomic SET NX EX to prevent TOCTOU race in rate limiting (M4)
 export async function checkPingRateLimit(redis: Redis, agentId: string): Promise<boolean> {
   const key = `ratelimit:${agentId}:pings`
-  const exists = await redis.exists(key)
-  if (exists) return false // rate limited
-  await redis.set(key, '1', { ex: PING_RATE_LIMIT_TTL })
-  return true
+  const result = await redis.set(key, '1', { nx: true, ex: PING_RATE_LIMIT_TTL })
+  return result !== null
 }
 
 export async function checkMissionRateLimit(redis: Redis, agentId: string): Promise<boolean> {
@@ -72,7 +73,13 @@ export async function checkResultHash(redis: Redis, hash: string): Promise<strin
   return await redis.get<string>(`result_hash:${hash}`)
 }
 
+// SECURITY: Use SCARD on a SET instead of KEYS to avoid O(n) scan (H5)
 export async function getOnlineCount(redis: Redis): Promise<number> {
-  const keys = await redis.keys('presence:*')
-  return keys.length
+  return await redis.scard('presence:online')
+}
+
+// SECURITY: Remove agent from online set when presence expires (H5)
+// Call this during cleanup or when an agent is known to be offline
+export async function removePresence(redis: Redis, agentId: string): Promise<void> {
+  await redis.srem('presence:online', agentId)
 }

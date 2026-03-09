@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { MCP_URL } from '@/lib/config'
 
 const CS = 5, FS = 5, PX = 3 // cici px, fire px, background px
 
@@ -428,6 +429,7 @@ export function WorldMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [total, setTotal] = useState(0)
   const [tooltip, setTooltip] = useState<{x:number;y:number;name:string;country:string}|null>(null)
+  // TODO: implement filter — toggle exists in UI but filtering is not yet wired up
   const [showMine, setShowMine] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [biomeName, setBiomeName] = useState('forest')
@@ -483,8 +485,9 @@ export function WorldMap() {
       requestAnimationFrame(() => { const cv = canvasRef.current; if (cv) initAgents(c, cv.width, cv.height) })
     }
     if (params.has('sim')) load(SIM)
-    else fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
-      .then(r => r.json()).then((d:{countries:Record<string,number>}) => load(d.countries))
+    else fetch(`${MCP_URL}/mcp/agents/countries`)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then((d:{countries:Record<string,number>}) => load(d.countries))
       .catch(() => load({'Austria':1}))
   }, [initAgents])
 
@@ -841,14 +844,15 @@ export function WorldMap() {
     }
 
     frameRef.current++
-    requestAnimationFrame(animate)
+    rafRef.current = requestAnimationFrame(animate)
   }, [drawSpr])
+
+  const rafRef = useRef(0)
 
   useEffect(() => {
     const cv = canvasRef.current; if (!cv) return
     const resize = () => {
       cv.width = window.innerWidth; cv.height = window.innerHeight - 40
-      const oldLv = levelRef.current
       const newLv = buildLevel(cv.width, cv.height, agentsRef.current.length, levelSeedRef.current, biomeRef.current)
       levelRef.current = newLv
       starsRef.current = buildStars(cv.width, cv.height, levelSeedRef.current)
@@ -863,8 +867,8 @@ export function WorldMap() {
       }
     }
     resize(); window.addEventListener('resize', resize)
-    const raf = requestAnimationFrame(animate)
-    return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(raf) }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(rafRef.current) }
   }, [animate])
 
   return (

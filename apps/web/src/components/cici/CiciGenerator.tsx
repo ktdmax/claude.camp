@@ -274,6 +274,8 @@ type CiciProps = {
   animDelay?: number
 }
 
+// Module-level counter to stagger animation phases across Cici instances.
+// Intentionally persists across renders so each new Cici gets a unique offset.
 let ciciCounter = 0
 
 // Build animation frames from base grid: blink, bob, ear twitch

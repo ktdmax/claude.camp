@@ -6,9 +6,15 @@ import { createSupabase, type MissionRow } from '../db/supabase'
 import { MISSION_BASE_POINTS, type MissionType } from '@claudecamp/mission-types'
 import { scoreResult, qualityMultiplier, qualityMessage } from '../scoring/quality'
 
+// SECURITY: Constrain result size to prevent abuse (M1)
+const MAX_RESULT_KEYS = 50
+
 const ReportInput = z.object({
   mission_id: z.string().min(1),
-  result: z.record(z.unknown()),
+  result: z.record(z.unknown()).refine(
+    (obj) => Object.keys(obj).length <= MAX_RESULT_KEYS,
+    { message: `Result must have at most ${MAX_RESULT_KEYS} keys.` }
+  ),
 })
 
 const RANK_THRESHOLDS: Array<{ min: number; rank: string }> = [
@@ -118,23 +124,18 @@ app.post('/mcp/report-result', async (c) => {
     points: pointsAwarded,
   }).eq('mission_id', input.data.mission_id)
 
-  // Update agent score + mission counts
-  const { data: agentData } = await supabase
-    .from('agents')
-    .select('score, missions_total, missions_ok')
-    .eq('agent_id', agent.agent_id)
-    .single()
+  // SECURITY: Atomic score update via Supabase RPC to prevent race conditions (H6)
+  // Single SQL statement increments score, missions_total, missions_ok and returns new score
+  const { data: newTotal } = await supabase.rpc('increment_agent_score', {
+    p_agent_id: agent.agent_id,
+    p_points: pointsAwarded,
+  })
 
-  const currentScore = (agentData?.score as number) ?? 0
-  const newTotal = currentScore + pointsAwarded
-  const newRank = rankForScore(newTotal)
+  const newScore = (newTotal as number) ?? pointsAwarded
+  const newRank = rankForScore(newScore)
 
-  await supabase.from('agents').update({
-    score: newTotal,
-    rank: newRank,
-    missions_total: ((agentData?.missions_total as number) ?? 0) + 1,
-    missions_ok: ((agentData?.missions_ok as number) ?? 0) + 1,
-  }).eq('agent_id', agent.agent_id)
+  // Update rank separately (lightweight, no race condition concern)
+  await supabase.from('agents').update({ rank: newRank }).eq('agent_id', agent.agent_id)
 
   // Clear claimed mission
   await clearClaimedMission(redis, agent.agent_id, input.data.mission_id)
@@ -143,7 +144,7 @@ app.post('/mcp/report-result', async (c) => {
     accepted: true,
     quality_score: qualityScore,
     points_awarded: pointsAwarded,
-    new_total: newTotal,
+    new_total: newScore,
     message,
   })
 })

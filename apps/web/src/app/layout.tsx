@@ -1,4 +1,5 @@
 import './globals.css'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export const metadata = {
   title: 'claude.camp',
@@ -12,7 +13,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
       </body>
     </html>
   )

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Cici, CampfireSvg } from '@claudecamp/campfire'
 import type { CiciState } from '@claudecamp/campfire'
 import { CampfireFeed } from './CampfireFeed'
+import { MCP_URL } from '@/lib/config'
 
 const MAX_VISIBLE_CICIS = 12
 
@@ -40,7 +41,8 @@ export function CampfireScene() {
     // Fetch online count from MCP health endpoint
     async function fetchHealth() {
       try {
-        const res = await fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/health')
+        const res = await fetch(`${MCP_URL}/mcp/health`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json() as { agents_online: number }
         setOnlineCount(data.agents_online)
 

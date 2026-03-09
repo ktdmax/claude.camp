@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { bodyLimit } from 'hono/body-limit'
 import type { Env, AgentJwtPayload } from './types'
 import { jwtMiddleware } from './auth/jwt'
 import { registerRoutes } from './tools/register'
@@ -11,11 +12,26 @@ import { createSupabase } from './db/supabase'
 
 const app = new Hono<{ Bindings: Env; Variables: { agent: AgentJwtPayload } }>()
 
-// Global middleware
-app.use('*', cors())
+// SECURITY: Restrict CORS to known origins only (H4)
+app.use('*', cors({
+  origin: ['https://claude.camp', 'https://claude-camp.pages.dev', 'https://claudecamp.dev'],
+}))
+
+// SECURITY: Limit request body size to 1 MB to prevent abuse (M9)
+app.use('*', bodyLimit({ maxSize: 1024 * 1024 }))
 
 // Public routes (no auth)
 app.route('/', registerRoutes)
+
+// SECURITY: HTML-escape user input to prevent XSS (C1)
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
 
 // OAuth callback — shows the code for manual registration
 app.get('/mcp/auth/callback', (c) => {
@@ -23,10 +39,12 @@ app.get('/mcp/auth/callback', (c) => {
   if (!code) {
     return c.text('No code received.', 400)
   }
+  // SECURITY: Escape code before embedding in HTML to prevent XSS (C1)
+  const safeCode = escapeHtml(code)
   return c.html(`<pre style="font-family:monospace;background:#0D0D1A;color:#F5F0E8;padding:2rem;min-height:100vh;margin:0">
 Your GitHub OAuth code:
 
-<code style="color:#E8572A;font-size:1.2rem">${code}</code>
+<code style="color:#E8572A;font-size:1.2rem">${safeCode}</code>
 
 Copy this code and use it to register.
 This code expires in 10 minutes.</pre>`)
@@ -58,10 +76,10 @@ app.get('/mcp/health', async (c) => {
   return c.json({ ok: true, agents_online: agentsOnline })
 })
 
-// Authenticated routes
-app.use('/mcp/ping', jwtMiddleware())
-app.use('/mcp/get-mission', jwtMiddleware())
-app.use('/mcp/report-result', jwtMiddleware())
+// SECURITY: Authenticated routes with scope enforcement (H3)
+app.use('/mcp/ping', jwtMiddleware('ping'))
+app.use('/mcp/get-mission', jwtMiddleware('mission'))
+app.use('/mcp/report-result', jwtMiddleware('mission'))
 
 app.route('/', pingRoutes)
 app.route('/', getMissionRoutes)

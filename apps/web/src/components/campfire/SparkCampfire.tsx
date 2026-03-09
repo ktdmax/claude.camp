@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { MCP_URL } from '@/lib/config'
 
 const BG = '#0D0D1A'
 
@@ -181,8 +182,8 @@ export function SparkCampfire() {
       setTotal(978)
       setRooms({'The Main Camp':412,'Europe Lounge':234,'Asia Hub':156,'Americas':98,'Oceania':42,'Africa':36})
     } else {
-      fetch('https://claudecamp-mcp.max-19f.workers.dev/mcp/agents/countries')
-        .then(r => r.json())
+      fetch(`${MCP_URL}/mcp/agents/countries`)
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
         .then((d:{countries:Record<string,number>}) => {
           const t = Object.values(d.countries).reduce((a,b)=>a+b,0)
           setTotal(t); setRooms(d.countries)
@@ -426,8 +427,10 @@ export function SparkCampfire() {
     }
 
     frameRef.current++
-    requestAnimationFrame(animate)
+    rafRef.current = requestAnimationFrame(animate)
   }, [])
+
+  const rafRef = useRef(0)
 
   useEffect(() => {
     const cv = canvasRef.current; if (!cv) return
@@ -437,8 +440,8 @@ export function SparkCampfire() {
       campersRef.current = buildCampers(cv.width / 2, cv.height * 0.62)
     }
     resize(); window.addEventListener('resize', resize)
-    const raf = requestAnimationFrame(animate)
-    return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(raf) }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(rafRef.current) }
   }, [animate])
 
   return (

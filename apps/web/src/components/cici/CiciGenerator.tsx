@@ -442,6 +442,88 @@ export function CiciShowcase() {
           ))}
         </div>
       </div>
+
+      {/* Lemmings parade — tiny Cicis marching across */}
+      <div style={{ marginTop: 48, borderTop: '1px solid #1A1A2E', paddingTop: 24 }}>
+        <div style={{ color: '#E8572A', fontSize: 13, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>
+          the march
+        </div>
+        <div style={{ color: '#8A8A9A', fontSize: 11, fontFamily: 'monospace', marginBottom: 16 }}>
+          30 unique Cicis. marching. somewhere important, probably.
+        </div>
+        <div style={{ position: 'relative', height: 80, overflow: 'hidden', background: '#0A0A14' }}>
+          {/* Ground line */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 4, background: '#1A1A2E' }} />
+          <div style={{ position: 'absolute', bottom: 4, left: 0, right: 0, height: 2, background: '#222240' }} />
+
+          {/* Marching Cicis */}
+          <div className="cici-march" style={{ display: 'flex', alignItems: 'flex-end', gap: 6, position: 'absolute', bottom: 6, whiteSpace: 'nowrap' }}>
+            {Array.from({ length: 30 }, (_, i) => {
+              // Generate unique hashes
+              const hash = (
+                (i * 1337 + 42).toString(16).padStart(4, '0') +
+                ((i * 7919 + 13).toString(16)).padStart(4, '0') +
+                ((i * 2953 + 99).toString(16)).padStart(4, '0') +
+                ((i * 4513 + 7).toString(16)).padStart(4, '0') +
+                ((i * 6131 + 31).toString(16)).padStart(4, '0') +
+                ((i * 8737 + 53).toString(16)).padStart(4, '0')
+              ).padEnd(64, 'f')
+              return (
+                <div
+                  key={i}
+                  className="cici-lemming"
+                  style={{
+                    animationDelay: `${i * 0.07}s`,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Cici traits={traitsFromHash(hash)} size={3} />
+                </div>
+              )
+            })}
+            {/* Duplicate for seamless loop */}
+            {Array.from({ length: 30 }, (_, i) => {
+              const hash = (
+                (i * 1337 + 42).toString(16).padStart(4, '0') +
+                ((i * 7919 + 13).toString(16)).padStart(4, '0') +
+                ((i * 2953 + 99).toString(16)).padStart(4, '0') +
+                ((i * 4513 + 7).toString(16)).padStart(4, '0') +
+                ((i * 6131 + 31).toString(16)).padStart(4, '0') +
+                ((i * 8737 + 53).toString(16)).padStart(4, '0')
+              ).padEnd(64, 'f')
+              return (
+                <div
+                  key={`d${i}`}
+                  className="cici-lemming"
+                  style={{
+                    animationDelay: `${i * 0.07}s`,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Cici traits={traitsFromHash(hash)} size={3} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        .cici-march {
+          animation: march 20s linear infinite;
+        }
+        @keyframes march {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .cici-lemming {
+          animation: waddle 0.4s ease-in-out infinite alternate;
+        }
+        @keyframes waddle {
+          0% { transform: translateY(0) rotate(-2deg); }
+          100% { transform: translateY(-2px) rotate(2deg); }
+        }
+      `}</style>
     </div>
   )
 }

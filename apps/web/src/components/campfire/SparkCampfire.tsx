@@ -454,6 +454,18 @@ export function SparkCampfire() {
       </div>
       <canvas ref={canvasRef} className="sc-canvas" onClick={() => { window.location.href = '/world' }} />
 
+      {/* JOIN sign — pixel art wooden signpost */}
+      <a href="/join" className="sc-join">
+        <div className="sc-join-post" />
+        <div className="sc-join-board">
+          <div className="sc-join-inner">
+            <span className="sc-join-arrow">{'>'}</span>
+            <span className="sc-join-text">JOIN</span>
+          </div>
+        </div>
+        <div className="sc-join-sub">grab a seat</div>
+      </a>
+
       {/* Info button — pixel (i) bottom right */}
       <div className="sc-info-btn" onClick={() => setShowInfo(!showInfo)}>i</div>
       {/* Help link */}
@@ -512,6 +524,20 @@ export function SparkCampfire() {
         .sc-rooms-hint{color:#8A8A9A;font-size:9px;font-family:monospace;margin-top:12px;cursor:pointer;text-align:center}
         .sc-rooms-hint:hover{color:#F5F0E8}
         @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+        .sc-join{position:absolute;right:12%;top:50%;transform:translateY(-50%);text-decoration:none;display:flex;flex-direction:column;align-items:center;z-index:2;cursor:pointer;transition:transform .1s}
+        .sc-join:hover{transform:translateY(-50%) translateY(-2px)}
+        .sc-join:hover .sc-join-board{border-color:#E8572A}
+        .sc-join:hover .sc-join-text{color:#FFD466}
+        .sc-join-post{width:4px;height:40px;background:#3D2817;image-rendering:pixelated}
+        .sc-join-board{background:#2A1A0E;border:2px solid #3D2817;padding:12px 24px;image-rendering:pixelated;position:relative}
+        .sc-join-board::before{content:'';position:absolute;top:-2px;left:-2px;right:-2px;height:2px;background:#4A2E18}
+        .sc-join-inner{display:flex;align-items:center;gap:8px}
+        .sc-join-arrow{color:#E8572A;font-family:monospace;font-size:20px;font-weight:700;animation:sc-blink 1.5s step-end infinite}
+        .sc-join-text{color:#F5F0E8;font-family:monospace;font-size:24px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase}
+        .sc-join-sub{color:#3D2817;font-family:monospace;font-size:8px;margin-top:4px;letter-spacing:0.1em}
+        .sc-join:hover .sc-join-sub{color:#8A8A9A}
+        @keyframes sc-blink{0%,100%{opacity:1}50%{opacity:0}}
+        @media(max-width:800px){.sc-join{right:5%;top:auto;bottom:60px;transform:none}.sc-join:hover{transform:translateY(-2px)}.sc-join-text{font-size:18px}.sc-join-board{padding:8px 16px}}
         .sc-info-btn{position:absolute;bottom:12px;right:12px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;background:#1A1A2E;color:#8A8A9A;font-family:monospace;font-size:11px;font-style:italic;cursor:pointer;z-index:2;border:1px solid #222240}
         .sc-info-btn:hover{color:#F5F0E8;border-color:#E8572A}
         .sc-help-btn{position:absolute;bottom:12px;right:40px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;background:#1A1A2E;color:#8A8A9A;font-family:monospace;font-size:11px;cursor:pointer;z-index:2;border:1px solid #222240;text-decoration:none}

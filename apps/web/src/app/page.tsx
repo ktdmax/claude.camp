@@ -1,5 +1,5 @@
-import { CampfireScene } from '@/components/campfire/CampfireScene'
+import { SparkCampfire } from '@/components/campfire/SparkCampfire'
 
-export default function CampfirePage() {
-  return <CampfireScene />
+export default function HomePage() {
+  return <SparkCampfire />
 }

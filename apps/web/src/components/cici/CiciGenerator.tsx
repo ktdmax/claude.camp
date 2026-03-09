@@ -552,15 +552,6 @@ export function CiciShowcaseV1() {
 // V2: Lemmings-style side-view walking parade
 export function CiciShowcaseV2() {
   // Also show some hash-generated front-view for reference
-  const hashes = [
-    'cd7d3c01e4dded89be3116a9f7398b46bf86612993a89e79ae419e94022871b5',
-    'a1b2c3d4e5f6789012345678abcdef0123456789abcdef0123456789abcdef01',
-    'deadbeefcafebabe1234567890abcdef1234567890abcdef1234567890abcdef',
-    'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
-    '42424242424242424242424242424242424242424242424242424242424242ff',
-    '0000000000000000000000000000000000000000000000000000000000000000',
-  ]
-
   return (
     <div style={{ padding: '24px 32px', background: '#0D0D1A', minHeight: '100vh' }}>
       <div style={{ color: '#F5F0E8', fontSize: 16, fontFamily: 'monospace', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
@@ -570,20 +561,17 @@ export function CiciShowcaseV2() {
         side-view walking Cicis. each one unique. marching somewhere important.
       </div>
 
-      {/* Front-view reference */}
+      {/* Big side-view showcase */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ color: '#E8572A', fontSize: 13, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>
-          front view (reference)
+          up close
         </div>
-        <div style={{ color: '#8A8A9A', fontSize: 11, fontFamily: 'monospace', marginBottom: 12 }}>
-          same agents, front-view style
+        <div style={{ color: '#8A8A9A', fontSize: 11, fontFamily: 'monospace', marginBottom: 16 }}>
+          side-view sprites, 2 walk frames each. color from hash.
         </div>
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-          {hashes.map((hash, i) => (
-            <div key={hash} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              <Cici traits={traitsFromHash(hash)} size={5} animated animDelay={i * 0.8} />
-              <span style={{ color: '#8A8A9A', fontSize: 8, fontFamily: 'monospace' }}>{hash.slice(0, 8)}...</span>
-            </div>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          {Array.from({ length: 10 }, (_, i) => (
+            <LemmingSingle key={i} idx={i} size={8} />
           ))}
         </div>
       </div>
@@ -614,7 +602,70 @@ export function CiciShowcaseV2() {
 }
 
 // === LEMMINGS PARADE ===
-// Side-view walking Cicis with leg animation on canvas
+// === SIDE-VIEW COMPONENTS ===
+
+// Big single side-view Cici with walk animation (canvas)
+function LemmingSingle({ idx, size }: { idx: number; size: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const colors = hashColor(idx)
+  const spriteW = 5
+  const spriteH = 10
+  const pw = spriteW * size
+  const ph = spriteH * size
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    let frame = 0
+    const interval = setInterval(() => {
+      frame = frame === 0 ? 1 : 0
+      const sprite = WALK_FRAMES[frame]!
+
+      ctx.clearRect(0, 0, pw, ph)
+      for (let ry = 0; ry < sprite.length; ry++) {
+        for (let cx = 0; cx < sprite[ry]!.length; cx++) {
+          const v = sprite[ry]![cx]!
+          if (v === 0) continue
+          if (ry <= 2) ctx.fillStyle = colors.ear
+          else if (ry >= 7) ctx.fillStyle = colors.leg
+          else ctx.fillStyle = colors.body
+          // Eye
+          if (ry === 2 && cx === 1) ctx.fillStyle = '#0D0D1A'
+          ctx.fillRect(cx * size, ry * size, size, size)
+        }
+      }
+    }, 300)
+
+    // Initial draw
+    const sprite = WALK_FRAMES[0]!
+    for (let ry = 0; ry < sprite.length; ry++) {
+      for (let cx = 0; cx < sprite[ry]!.length; cx++) {
+        const v = sprite[ry]![cx]!
+        if (v === 0) continue
+        if (ry <= 2) ctx.fillStyle = colors.ear
+        else if (ry >= 7) ctx.fillStyle = colors.leg
+        else ctx.fillStyle = colors.body
+        if (ry === 2 && cx === 1) ctx.fillStyle = '#0D0D1A'
+        ctx.fillRect(cx * size, ry * size, size, size)
+      }
+    }
+
+    return () => clearInterval(interval)
+  }, [colors, size, pw, ph])
+
+  const label = `cici #${idx}`
+
+  return (
+    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <canvas ref={canvasRef} width={pw} height={ph}
+        style={{ width: pw, height: ph, imageRendering: 'pixelated' }} />
+      <span style={{ color: '#8A8A9A', fontSize: 10, fontFamily: 'monospace' }}>{label}</span>
+    </div>
+  )
+}
 
 // Side-view Cici walker: 5 wide × 10 tall, 2 frames
 // 0=transparent, 1=body, 2=eye, 3=ear, 4=leg

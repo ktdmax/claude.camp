@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
+
 // Pixel size for rendering
 const PX = 5
 
@@ -443,7 +445,7 @@ export function CiciShowcase() {
         </div>
       </div>
 
-      {/* Lemmings parade — tiny Cicis marching across */}
+      {/* Lemmings parade — side-view walking Cicis with leg animation */}
       <div style={{ marginTop: 48, borderTop: '1px solid #1A1A2E', paddingTop: 24 }}>
         <div style={{ color: '#E8572A', fontSize: 13, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>
           the march
@@ -451,79 +453,164 @@ export function CiciShowcase() {
         <div style={{ color: '#8A8A9A', fontSize: 11, fontFamily: 'monospace', marginBottom: 16 }}>
           30 unique Cicis. marching. somewhere important, probably.
         </div>
-        <div style={{ position: 'relative', height: 80, overflow: 'hidden', background: '#0A0A14' }}>
-          {/* Ground line */}
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 4, background: '#1A1A2E' }} />
-          <div style={{ position: 'absolute', bottom: 4, left: 0, right: 0, height: 2, background: '#222240' }} />
-
-          {/* Marching Cicis */}
-          <div className="cici-march" style={{ display: 'flex', alignItems: 'flex-end', gap: 6, position: 'absolute', bottom: 6, whiteSpace: 'nowrap' }}>
-            {Array.from({ length: 30 }, (_, i) => {
-              // Generate unique hashes
-              const hash = (
-                (i * 1337 + 42).toString(16).padStart(4, '0') +
-                ((i * 7919 + 13).toString(16)).padStart(4, '0') +
-                ((i * 2953 + 99).toString(16)).padStart(4, '0') +
-                ((i * 4513 + 7).toString(16)).padStart(4, '0') +
-                ((i * 6131 + 31).toString(16)).padStart(4, '0') +
-                ((i * 8737 + 53).toString(16)).padStart(4, '0')
-              ).padEnd(64, 'f')
-              return (
-                <div
-                  key={i}
-                  className="cici-lemming"
-                  style={{
-                    animationDelay: `${i * 0.07}s`,
-                    flexShrink: 0,
-                  }}
-                >
-                  <Cici traits={traitsFromHash(hash)} size={3} />
-                </div>
-              )
-            })}
-            {/* Duplicate for seamless loop */}
-            {Array.from({ length: 30 }, (_, i) => {
-              const hash = (
-                (i * 1337 + 42).toString(16).padStart(4, '0') +
-                ((i * 7919 + 13).toString(16)).padStart(4, '0') +
-                ((i * 2953 + 99).toString(16)).padStart(4, '0') +
-                ((i * 4513 + 7).toString(16)).padStart(4, '0') +
-                ((i * 6131 + 31).toString(16)).padStart(4, '0') +
-                ((i * 8737 + 53).toString(16)).padStart(4, '0')
-              ).padEnd(64, 'f')
-              return (
-                <div
-                  key={`d${i}`}
-                  className="cici-lemming"
-                  style={{
-                    animationDelay: `${i * 0.07}s`,
-                    flexShrink: 0,
-                  }}
-                >
-                  <Cici traits={traitsFromHash(hash)} size={3} />
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <LemmingsParade count={30} />
       </div>
+    </div>
+  )
+}
 
-      <style>{`
-        .cici-march {
-          animation: march 20s linear infinite;
+// === LEMMINGS PARADE ===
+// Side-view walking Cicis with leg animation on canvas
+
+// Side-view Cici walker: 5 wide × 10 tall, 2 frames
+// 0=transparent, 1=body, 2=eye, 3=ear, 4=leg
+const WALK_FRAMES: number[][][] = [
+  [ // Frame 1: left leg forward
+    [0,1,1,0,0],  // ear
+    [1,1,1,1,0],  // head
+    [1,0,1,1,0],  // eye
+    [1,1,1,1,0],  // body
+    [0,1,1,0,0],  // body narrow
+    [0,1,1,0,0],  // hip
+    [0,1,1,0,0],  // thigh
+    [1,0,0,1,0],  // legs split
+    [1,0,0,0,0],  // left foot forward
+    [0,0,0,1,0],  // right foot back
+  ],
+  [ // Frame 2: right leg forward
+    [0,1,1,0,0],
+    [1,1,1,1,0],
+    [1,0,1,1,0],
+    [1,1,1,1,0],
+    [0,1,1,0,0],
+    [0,1,1,0,0],
+    [0,1,1,0,0],
+    [1,0,0,1,0],
+    [0,0,0,1,0],  // right foot forward
+    [1,0,0,0,0],  // left foot back
+  ],
+]
+
+function hashColor(idx: number): { body: string; ear: string; leg: string } {
+  // Generate unique hue per lemming
+  const h = ((idx * 137 + 42) % 360)
+  return {
+    body: hsl(h, 0.45, 0.62),
+    ear: hsl(h, 0.42, 0.55),
+    leg: hsl(h, 0.38, 0.50),
+  }
+}
+
+function LemmingsParade({ count }: { count: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const animRef = useRef<number>(0)
+  const frameCount = useRef(0)
+
+  type Lemming = { x: number; speed: number; frame: number; frameTimer: number; colors: ReturnType<typeof hashColor> }
+
+  const lemmings = useRef<Lemming[]>([])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctxOrNull = canvas.getContext('2d')
+    if (!ctxOrNull) return
+    const ctx = ctxOrNull
+
+    const W = canvas.parentElement?.clientWidth ?? 800
+    const H = 100
+    canvas.width = W
+    canvas.height = H
+    const S = 3 // pixel size
+
+    // Init lemmings spread across the width
+    lemmings.current = Array.from({ length: count }, (_, i) => ({
+      x: (W / count) * i + Math.random() * 20 - 10,
+      speed: 0.4 + ((i * 7 + 3) % 10) * 0.04,
+      frame: i % 2,
+      frameTimer: (i * 3) % 12,
+      colors: hashColor(i),
+    }))
+
+    function drawLemming(c: CanvasRenderingContext2D, l: Lemming) {
+      const sprite = WALK_FRAMES[l.frame]!
+      const groundY = H - 8 // ground level
+      const baseY = groundY - sprite.length * S
+
+      for (let ry = 0; ry < sprite.length; ry++) {
+        for (let cx = 0; cx < sprite[ry]!.length; cx++) {
+          const v = sprite[ry]![cx]!
+          if (v === 0) continue
+          // Color based on pixel type and row
+          if (ry <= 2) c.fillStyle = l.colors.ear   // head area
+          else if (ry >= 7) c.fillStyle = l.colors.leg // legs
+          else c.fillStyle = l.colors.body
+
+          // Eye is dark
+          if (v === 1 && ry === 2 && cx === 1) {
+            c.fillStyle = '#0D0D1A'
+          }
+
+          c.fillRect(
+            Math.floor(l.x) + cx * S,
+            baseY + ry * S,
+            S, S
+          )
         }
-        @keyframes march {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+      }
+    }
+
+    function animate() {
+      ctx.fillStyle = '#0A0A14'
+      ctx.fillRect(0, 0, W, H)
+
+      // Ground
+      ctx.fillStyle = '#1A1A2E'
+      ctx.fillRect(0, H - 8, W, 4)
+      ctx.fillStyle = '#222240'
+      ctx.fillRect(0, H - 8, W, 2)
+
+      // Update & draw lemmings
+      for (const l of lemmings.current) {
+        l.x += l.speed
+
+        // Wrap around
+        if (l.x > W + 20) l.x = -20
+
+        // Walk animation: toggle frame every ~10 ticks
+        l.frameTimer++
+        if (l.frameTimer > 8) {
+          l.frameTimer = 0
+          l.frame = l.frame === 0 ? 1 : 0
         }
-        .cici-lemming {
-          animation: waddle 0.4s ease-in-out infinite alternate;
-        }
-        @keyframes waddle {
-          0% { transform: translateY(0) rotate(-2deg); }
-          100% { transform: translateY(-2px) rotate(2deg); }
-        }
-      `}</style>
+
+        drawLemming(ctx, l)
+      }
+
+      frameCount.current++
+      animRef.current = requestAnimationFrame(animate)
+    }
+
+    animRef.current = requestAnimationFrame(animate)
+
+    const handleResize = () => {
+      const newW = canvas.parentElement?.clientWidth ?? 800
+      canvas.width = newW
+    }
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      cancelAnimationFrame(animRef.current)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [count])
+
+  return (
+    <div style={{ position: 'relative', height: 100, overflow: 'hidden' }}>
+      <canvas
+        ref={canvasRef}
+        style={{ display: 'block', width: '100%', height: 100, imageRendering: 'pixelated' }}
+      />
     </div>
   )
 }

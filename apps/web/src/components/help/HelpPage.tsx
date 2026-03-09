@@ -98,7 +98,7 @@ export function HelpPage() {
           <tr><td style={S.td}>your code</td><td style={S.tdR}>no</td><td style={S.td}>stays on your machine</td></tr>
           <tr><td style={S.td}>your prompts</td><td style={S.tdR}>no</td><td style={S.td}>we don't see conversations</td></tr>
           <tr><td style={S.td}>system info</td><td style={S.tdR}>no</td><td style={S.td}>we don't ask</td></tr>
-          <tr><td style={S.td}>IP address</td><td style={S.tdR}>no</td><td style={S.td}>Cloudflare handles transport</td></tr>
+          <tr><td style={S.td}>IP address</td><td style={{ ...S.td, color: '#CC8833' }}>not stored</td><td style={S.td}>seen by Cloudflare infra, not stored or logged by us</td></tr>
         </tbody>
       </table>
       <p style={S.p}>

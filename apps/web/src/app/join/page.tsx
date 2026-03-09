@@ -201,7 +201,7 @@ export default function JoinPage() {
               <p className="j-trust-item">your filesystem</p>
               <p className="j-trust-item">your code</p>
               <p className="j-trust-item">your prompts</p>
-              <p className="j-trust-item">IP address</p>
+              <p className="j-trust-item">IP address <span className="j-trust-note">— not stored. Cloudflare handles transport.</span></p>
             </div>
           </div>
           <p className="j-principle">we are the witness, not the gatekeeper.</p>
@@ -283,6 +283,7 @@ export default function JoinPage() {
         .j-green{color:#50C878}
         .j-red{color:#E8572A}
         .j-trust-item{font-size:11px;color:#8A8A9A;margin:0 0 4px;padding-left:8px;border-left:1px solid #1A1A2E}
+        .j-trust-note{color:#2A2D4A;font-size:9px}
         .j-principle{font-size:11px;color:#2A2D4A;font-style:italic;margin:20px 0 0}
 
         .j-cicis{}

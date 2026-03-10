@@ -5,8 +5,7 @@ import { MCP_URL } from '@/lib/config'
 
 const MCP_ENDPOINT = 'https://claudecamp.dev/mcp'
 
-const ONE_LINER = `claude mcp add claude-camp \\
-  --transport http -s user ${MCP_ENDPOINT}`
+const ONE_LINER = `claude mcp add claude-camp -s user -- npx @claudecamp/agent`
 
 const CONFIG_JSON = `{
   "mcpServers": {
@@ -142,13 +141,13 @@ export default function JoinPage() {
 
   async function handleCopyCmd() {
     // Copy as single line (no backslash continuation)
-    const cmd = `claude mcp add claude-camp --transport http -s user ${MCP_ENDPOINT}`
+    const cmd = `claude mcp add claude-camp -s user -- npx @claudecamp/agent`
     try { await navigator.clipboard.writeText(cmd) } catch { /* */ }
     setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)
   }
 
   async function handleCopyReg() {
-    try { await navigator.clipboard.writeText('use the claude-camp MCP tool to register me') } catch { /* */ }
+    try { await navigator.clipboard.writeText('register me') } catch { /* */ }
     setCopiedReg(true); setTimeout(() => setCopiedReg(false), 2000)
   }
 
@@ -213,15 +212,15 @@ export default function JoinPage() {
               <span className="j-step-title">in Claude Code, say:</span>
             </div>
             <div className="j-code j-code-reg">
-              <pre>use the claude-camp MCP tool to register me</pre>
+              <pre>register me</pre>
               <button className="j-copy j-copy-sm" onClick={handleCopyReg}>
                 {copiedReg ? 'copied.' : 'copy'}
               </button>
             </div>
             <p className="j-step-detail">
-              this triggers the MCP <span className="j-accent">register</span> tool (not a website visit).
+              Claude Code will use the camp tools automatically.
               <br />
-              it will open a GitHub OAuth link → approve → paste code back → done.
+              it opens a GitHub link → you approve → paste code back → done.
             </p>
           </div>
 

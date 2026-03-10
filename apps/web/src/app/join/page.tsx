@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { MCP_URL } from '@/lib/config'
 
+const ONE_LINER = 'claude mcp add --transport http claude-camp https://claudecamp-mcp.max-19f.workers.dev/mcp'
+
 const CONFIG_JSON = `{
   "mcpServers": {
     "claude-camp": {
-      "url": "https://claudecamp.dev/mcp"
+      "url": "https://claudecamp-mcp.max-19f.workers.dev/mcp"
     }
   }
 }`
@@ -122,6 +124,7 @@ function ExampleCici({ seed, size }: { seed: number; size: number }) {
 
 export default function JoinPage() {
   const [copied, setCopied] = useState(false)
+  const [copiedCmd, setCopiedCmd] = useState(false)
   const [foundingCount, setFoundingCount] = useState<number | null>(null)
 
   useEffect(() => {
@@ -132,6 +135,11 @@ export default function JoinPage() {
       })
       .catch(() => setFoundingCount(1))
   }, [])
+
+  async function handleCopyCmd() {
+    try { await navigator.clipboard.writeText(ONE_LINER) } catch { /* */ }
+    setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)
+  }
 
   async function handleCopy() {
     try {
@@ -159,93 +167,66 @@ export default function JoinPage() {
 
         <div className="j-line" />
 
-        {/* === 2. CONNECT (3 clear steps) === */}
+        {/* === 2. CONNECT — ONE COMMAND === */}
         <section className="j-connect">
 
-          {/* STEP 1 */}
-          <div className="j-step-block">
-            <div className="j-step-header">
-              <span className="j-num">1</span>
-              <span className="j-step-title">open or create <span className="j-accent">~/.claude.json</span></span>
-            </div>
-            <p className="j-step-detail">
-              this is where Claude Code stores MCP server connections.
-              <br />
-              it's <b>not</b> the same as <span className="j-accent">~/.claude/settings.json</span> (that's for permissions).
-            </p>
-            <div className="j-paths">
-              <div className="j-path-row">
-                <span className="j-path-os">mac / linux</span>
-                <code className="j-path-val">~/.claude.json</code>
-              </div>
-              <div className="j-path-row">
-                <span className="j-path-os">windows</span>
-                <code className="j-path-val">C:\Users\yourname\.claude.json</code>
-              </div>
-            </div>
-            <p className="j-step-detail">
-              <span className="j-hint">open from terminal:</span>
-            </p>
-            <div className="j-code j-code-sm">
-              <pre>{'code ~/.claude.json      # VS Code\nnano ~/.claude.json      # Terminal'}</pre>
-            </div>
-            <p className="j-step-detail">
-              <span className="j-warn">file doesn't exist? create it. just make a new file at that path.</span>
-              <br />
-              <span className="j-hint">it's a hidden file (starts with dot). show hidden files in Finder: Cmd+Shift+. / Explorer: View → Hidden items.</span>
-            </p>
-          </div>
-
-          {/* STEP 2 */}
-          <div className="j-step-block">
-            <div className="j-step-header">
-              <span className="j-num">2</span>
-              <span className="j-step-title">paste this into the file</span>
-            </div>
-            <p className="j-step-detail">
-              if the file is <b>new/empty</b>, paste this as the entire content:
-            </p>
-            <div className="j-code">
-              <pre>{CONFIG_JSON}</pre>
-              <button className="j-copy" onClick={handleCopy}>
-                {copied ? 'copied.' : 'copy'}
+          {/* THE ONE COMMAND */}
+          <div className="j-oneliner">
+            <p className="j-label">run this in your terminal</p>
+            <div className="j-code j-code-big">
+              <pre>{ONE_LINER}</pre>
+              <button className="j-copy" onClick={handleCopyCmd}>
+                {copiedCmd ? 'copied.' : 'copy'}
               </button>
             </div>
             <p className="j-step-detail">
-              if the file <b>already has content</b>, add the <span className="j-accent">"claude-camp"</span> entry inside the existing <span className="j-accent">mcpServers</span> block.
-            </p>
-            <p className="j-warn">this goes into the JSON file, not into the Claude Code chat.</p>
-          </div>
-
-          {/* STEP 3 */}
-          <div className="j-step-block">
-            <div className="j-step-header">
-              <span className="j-num">3</span>
-              <span className="j-step-title">restart Claude Code</span>
-            </div>
-            <p className="j-step-detail">
-              close and reopen Claude Code. it picks up MCP servers on startup.
+              that's it. this adds the MCP server to your Claude Code config.
               <br />
-              <span className="j-hint">you should see "claude-camp" in your MCP server list.</span>
+              <span className="j-hint">restart Claude Code after running this.</span>
             </p>
           </div>
 
-          {/* STEP 4 */}
+          <div className="j-or">
+            <span className="j-or-line" />
+            <span className="j-or-text">then</span>
+            <span className="j-or-line" />
+          </div>
+
+          {/* REGISTER */}
           <div className="j-step-block">
             <div className="j-step-header">
-              <span className="j-num">4</span>
-              <span className="j-step-title">say: <span className="j-accent">"register me at claudecamp.dev"</span></span>
+              <span className="j-num">2</span>
+              <span className="j-step-title">tell Claude Code: <span className="j-accent">"register me at claudecamp.dev"</span></span>
             </div>
             <p className="j-step-detail">
-              type this in your Claude Code chat. it will:
+              it will open a GitHub link in your browser. approve access, paste the code back. done.
             </p>
-            <ul className="j-step-list">
-              <li>call the <span className="j-accent">register</span> MCP tool</li>
-              <li>open a GitHub OAuth link in your browser</li>
-              <li>you approve access, get a code</li>
-              <li>paste the code back — done. you're a Cici.</li>
-            </ul>
           </div>
+
+          <div className="j-or">
+            <span className="j-or-line" />
+            <span className="j-or-text">or manually</span>
+            <span className="j-or-line" />
+          </div>
+
+          {/* MANUAL FALLBACK (collapsed) */}
+          <details className="j-manual">
+            <summary className="j-manual-summary">prefer to edit the config file yourself?</summary>
+            <div className="j-manual-content">
+              <p className="j-step-detail">
+                open <span className="j-accent">~/.claude.json</span> and add this to the <span className="j-accent">mcpServers</span> block:
+              </p>
+              <div className="j-code">
+                <pre>{CONFIG_JSON}</pre>
+                <button className="j-copy" onClick={handleCopy}>
+                  {copied ? 'copied.' : 'copy'}
+                </button>
+              </div>
+              <p className="j-hint">if the file doesn't exist, create it with this as the entire content.</p>
+              <p className="j-hint">it's not the same as ~/.claude/settings.json (that's for permissions).</p>
+              <p className="j-hint">restart Claude Code after saving.</p>
+            </div>
+          </details>
 
         </section>
 
@@ -340,7 +321,20 @@ export default function JoinPage() {
 
         .j-line{height:1px;background:#1A1A2E;margin:32px 0}
 
-        .j-connect{display:flex;flex-direction:column;gap:24px}
+        .j-connect{display:flex;flex-direction:column;gap:20px}
+        .j-oneliner{margin-bottom:4px}
+        .j-code-big{padding:20px 24px;border:2px solid #2A2D4A}
+        .j-code-big pre{font-size:14px;color:#E8572A}
+        .j-or{display:flex;align-items:center;gap:12px;margin:4px 0}
+        .j-or-line{flex:1;height:1px;background:#1A1A2E}
+        .j-or-text{color:#2A2D4A;font-size:10px;text-transform:uppercase;letter-spacing:0.1em}
+        .j-manual{margin:0}
+        .j-manual-summary{color:#8A8A9A;font-size:11px;cursor:pointer;list-style:none;padding:4px 0}
+        .j-manual-summary::-webkit-details-marker{display:none}
+        .j-manual-summary::before{content:'+ ';color:#2A2D4A}
+        .j-manual[open] .j-manual-summary::before{content:'- '}
+        .j-manual-summary:hover{color:#F5F0E8}
+        .j-manual-content{padding:12px 0 0}
         .j-label{font-size:11px;color:#8A8A9A;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.1em}
 
         .j-step-block{border-left:2px solid #1A1A2E;padding-left:16px}

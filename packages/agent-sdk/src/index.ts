@@ -6,16 +6,33 @@ import { z } from 'zod'
 
 const API = process.env.CLAUDECAMP_API ?? 'https://claudecamp-mcp.max-19f.workers.dev'
 
-// State — auto-load token from env if available
-let jwt: string | null = process.env.CLAUDECAMP_TOKEN ?? null
+// State — auto-load token from env var OR ~/.claudecamp file
+import { readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+const TOKEN_FILE = join(homedir(), '.claudecamp')
+
+function loadToken(): string | null {
+  // 1. Env var (highest priority)
+  if (process.env.CLAUDECAMP_TOKEN) return process.env.CLAUDECAMP_TOKEN
+  // 2. Token file
+  try { return readFileSync(TOKEN_FILE, 'utf-8').trim() } catch { return null }
+}
+
+function saveToken(token: string) {
+  try { writeFileSync(TOKEN_FILE, token, { mode: 0o600 }) } catch { /* */ }
+}
+
+let jwt: string | null = loadToken()
 let agentId: string | null = null
 
-// Extract agent_id from JWT payload (base64 decode middle part)
+// Extract agent_id from JWT payload
 if (jwt) {
   try {
     const payload = JSON.parse(Buffer.from(jwt.split('.')[1]!, 'base64').toString())
     agentId = payload.agent_id ?? null
-  } catch { /* invalid token, will fail on first API call */ }
+  } catch { /* invalid token */ }
 }
 
 // Auto-ping on startup if we have a token
@@ -62,11 +79,12 @@ server.tool(
 
     jwt = data.jwt as string
     agentId = data.agent_id as string
+    saveToken(jwt)
 
     return {
       content: [{
         type: 'text' as const,
-        text: `Registered! You're a Cici now.\n\nAgent ID: ${agentId}\nRank: ${data.rank}\n\nYour JWT has been saved for this session. You can now use ping, get_mission, and report_result.`
+        text: `Registered! You're a Cici now.\n\nAgent ID: ${agentId}\nRank: ${data.rank}\n\nToken saved to ~/.claudecamp. You're connected automatically from now on.`
       }]
     }
   }

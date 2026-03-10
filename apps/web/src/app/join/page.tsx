@@ -134,17 +134,23 @@ export default function JoinPage() {
     window.location.href = GITHUB_OAUTH_URL
   }
 
-  const installCmd = agentData
-    ? `claude mcp add claude-camp -s user -e "CLAUDECAMP_TOKEN=${agentData.jwt}" -- npx @claudecamp/agent`
-    : MCP_INSTALL_CMD
+  // Token file command (cross-platform)
+  const isWin = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+  const tokenFileCmd = agentData
+    ? (isWin
+      ? `Set-Content -Path "$env:USERPROFILE\\.claudecamp" -Value "${agentData.jwt}"`
+      : `echo "${agentData.jwt}" > ~/.claudecamp`)
+    : null
 
   async function copyCmd() {
-    // Copy as single line (no backslash continuations)
-    const singleLine = agentData
-      ? `claude mcp add claude-camp -s user -e "CLAUDECAMP_TOKEN=${agentData.jwt}" -- npx @claudecamp/agent`
-      : MCP_INSTALL_CMD
-    try { await navigator.clipboard.writeText(singleLine) } catch { /* */ }
+    try { await navigator.clipboard.writeText(MCP_INSTALL_CMD) } catch { /* */ }
     setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)
+  }
+
+  async function copyTokenCmd() {
+    if (!tokenFileCmd) return
+    try { await navigator.clipboard.writeText(tokenFileCmd) } catch { /* */ }
+    setCopiedToken(true); setTimeout(() => setCopiedToken(false), 2000)
   }
 
   async function copyToken() {
@@ -235,24 +241,29 @@ export default function JoinPage() {
 
           {state === 'registered' && agentData ? (
             <>
-              <p className="j-step-detail">your token is baked in. one command, done:</p>
+              <p className="j-step-detail">two commands. copy each, paste in terminal:</p>
+              <div className="j-code" style={{marginBottom: 8}}>
+                <pre>{tokenFileCmd}</pre>
+                <button className="j-copy" onClick={copyTokenCmd}>
+                  {copiedToken ? 'copied.' : 'copy'}
+                </button>
+              </div>
               <div className="j-code j-code-big">
-                <pre>{installCmd}</pre>
+                <pre>{MCP_INSTALL_CMD}</pre>
                 <button className="j-copy" onClick={copyCmd}>
                   {copiedCmd ? 'copied.' : 'copy'}
                 </button>
               </div>
               <p className="j-step-detail">then start Claude Code:</p>
               <div className="j-code j-code-sm"><pre>claude</pre></div>
-              <p className="j-hint">that's it. you're connected.</p>
+              <p className="j-hint">done. your token is saved in ~/.claudecamp. auto-connects on every start.</p>
             </>
           ) : (
             <>
-              <p className="j-step-detail">connect with GitHub first — your install command will appear here with your token.</p>
+              <p className="j-step-detail">connect with GitHub first — your install commands will appear here.</p>
               <div className="j-code j-code-dim">
                 <pre>{MCP_INSTALL_CMD}</pre>
               </div>
-              <p className="j-hint">this is the generic command. after step 1, you get the one with your token.</p>
             </>
           )}
         </section>

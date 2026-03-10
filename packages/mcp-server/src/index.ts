@@ -33,22 +33,20 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#x27;')
 }
 
-// SECURITY: state param not needed here — callback only displays the code for manual copy,
-// does not auto-authenticate. No session is created, no cookie is set. (M1)
+// SECURITY: OAuth callback redirects to the website with the code.
+// The website then calls POST /mcp/register to exchange it.
+// No session created, no cookie set, no token in URL.
 app.get('/mcp/auth/callback', (c) => {
   const code = c.req.query('code') ?? ''
   if (!code) {
     return c.text('No code received.', 400)
   }
-  // SECURITY: Escape code before embedding in HTML to prevent XSS (C1)
-  const safeCode = escapeHtml(code)
-  return c.html(`<pre style="font-family:monospace;background:#0D0D1A;color:#F5F0E8;padding:2rem;min-height:100vh;margin:0">
-Your GitHub OAuth code:
-
-<code style="color:#E8572A;font-size:1.2rem">${safeCode}</code>
-
-Copy this code and use it to register.
-This code expires in 10 minutes.</pre>`)
+  // Redirect to website /join with the code — website handles registration
+  const webBase = c.env.ENVIRONMENT === 'production'
+    ? 'https://claude-camp.pages.dev'
+    : 'http://localhost:3001'
+  // SECURITY: code is a GitHub OAuth code (alphanumeric + hex), safe for URL param
+  return c.redirect(`${webBase}/join?code=${encodeURIComponent(code)}`)
 })
 
 // Public API: aggregated country counts for world map

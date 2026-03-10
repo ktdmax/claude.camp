@@ -116,9 +116,11 @@ export default function JoinPage() {
   }, [])
 
   function handleGitHubLogin() {
-    // Redirect to GitHub OAuth — callback comes back to /join?code=xxx
-    const callbackUrl = `${MCP_URL}/mcp/auth/callback`
-    window.location.href = `${GITHUB_OAUTH_URL}&redirect_uri=${encodeURIComponent(callbackUrl)}`
+    // Redirect to GitHub OAuth
+    // GitHub calls back to /mcp/auth/callback (configured in GitHub app)
+    // Our server redirects back to /join?code=xxx
+    // Then this page exchanges the code via POST /mcp/register
+    window.location.href = GITHUB_OAUTH_URL
   }
 
   const installCmd = agentData

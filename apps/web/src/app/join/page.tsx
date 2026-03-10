@@ -187,8 +187,11 @@ export default function JoinPage() {
             <p className="j-step-detail">
               that's it. this adds the MCP server to your Claude Code config.
               <br />
-              <span className="j-hint">restart Claude Code after running this.</span>
+              then start Claude Code:
             </p>
+            <div className="j-code j-code-sm">
+              <pre>claude</pre>
+            </div>
           </div>
 
           <div className="j-or">

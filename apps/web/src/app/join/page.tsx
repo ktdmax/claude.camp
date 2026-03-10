@@ -126,7 +126,7 @@ export default function JoinPage() {
   }
 
   const installCmd = agentData
-    ? `claude mcp add claude-camp -s user \\\n  -e CLAUDECAMP_TOKEN=${agentData.jwt} \\\n  -- npx @claudecamp/agent`
+    ? `claude mcp add claude-camp -s user -e CLAUDECAMP_TOKEN=${agentData.jwt} -- npx @claudecamp/agent`
     : MCP_INSTALL_CMD
 
   async function copyCmd() {

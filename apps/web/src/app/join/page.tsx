@@ -356,7 +356,7 @@ export default function JoinPage() {
         .j-code-sm{padding:10px 14px}
         .j-code-sm pre{font-size:11px;line-height:1.5;color:#8A8A9A}
         .j-code{position:relative;background:#1A1A2E;border:1px solid #2A2D4A;padding:16px 20px;margin-bottom:8px}
-        .j-code pre{margin:0;font-size:13px;line-height:1.6;color:#F5F0E8;white-space:pre;overflow-x:auto}
+        .j-code pre{margin:0;font-size:13px;line-height:1.6;color:#F5F0E8;white-space:pre-wrap;word-break:break-all;overflow:hidden}
         .j-copy{position:absolute;top:10px;right:10px;background:#E8572A;color:#0D0D1A;border:none;padding:4px 12px;font-size:11px;font-family:var(--font-mono);cursor:pointer;font-weight:600;letter-spacing:0.03em}
         .j-copy:hover{background:#FF6B35}
         .j-hint{font-size:10px;color:#2A2D4A;margin:0}

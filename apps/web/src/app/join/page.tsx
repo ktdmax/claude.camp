@@ -3,40 +3,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { MCP_URL } from '@/lib/config'
 
-const MCP_ENDPOINT = 'https://claudecamp.dev/mcp'
+const GITHUB_CLIENT_ID = 'Ov23li5vJldFlWcHCiDs'
+const GITHUB_OAUTH_URL = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user`
+const MCP_INSTALL_CMD = 'claude mcp add claude-camp -s user -- npx @claudecamp/agent'
 
-const ONE_LINER = `claude mcp add claude-camp -s user -- npx @claudecamp/agent`
-
-const CONFIG_JSON = `{
-  "mcpServers": {
-    "claude-camp": {
-      "url": "${MCP_ENDPOINT}"
-    }
-  }
-}`
-
-// === MINI CICI RENDERER (self-contained, no external deps) ===
-// 11×10 front-view Cici with idle bob animation on canvas
+// === MINI CICI (canvas, idle animation) ===
 const CICI_SPRITE: number[][] = [
-  [0,2,2,0,0,0,0,0,2,2,0],
-  [0,1,1,1,1,1,1,1,1,1,0],
-  [0,1,1,1,1,1,1,1,1,1,0],
-  [0,1,1,3,1,1,1,3,1,1,0],
-  [0,1,1,3,1,1,1,3,1,1,0],
-  [0,1,1,1,1,1,1,1,1,1,0],
-  [0,1,1,1,1,1,1,1,1,1,5],
-  [0,1,1,1,1,1,1,1,1,1,0],
-  [0,4,4,0,4,4,0,4,4,0,4],
-  [0,4,4,0,4,4,0,4,4,0,4],
+  [0,2,2,0,0,0,0,0,2,2,0],[0,1,1,1,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,1,1,1,0],
+  [0,1,1,3,1,1,1,3,1,1,0],[0,1,1,3,1,1,1,3,1,1,0],[0,1,1,1,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,1,1,1,5],[0,1,1,1,1,1,1,1,1,1,0],
+  [0,4,4,0,4,4,0,4,4,0,4],[0,4,4,0,4,4,0,4,4,0,4],
 ]
 const CICI_BLINK: number[][] = CICI_SPRITE.map((row, ry) =>
   ry === 3 || ry === 4 ? row.map(v => v === 3 ? 1 : v) : [...row]
 )
-// Bobbed version (shift down 1 row)
-const CICI_BOB: number[][] = [
-  [0,0,0,0,0,0,0,0,0,0,0],
-  ...CICI_SPRITE.slice(0, -1),
-]
 
 function hsl2hex(h: number, s: number, l: number): string {
   const a = s * Math.min(l, 1 - l)
@@ -50,23 +30,15 @@ function hsl2hex(h: number, s: number, l: number): string {
 function IdleCici({ seed, size }: { seed: number; size: number }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const h = (seed * 137 + 42) % 360
-  const body = hsl2hex(h, 0.5, 0.6)
-  const dark = hsl2hex(h, 0.45, 0.42)
-  const arm = hsl2hex(h, 0.42, 0.38)
-
+  const body = hsl2hex(h, 0.5, 0.6), dark = hsl2hex(h, 0.45, 0.42), arm = hsl2hex(h, 0.42, 0.38)
   useEffect(() => {
     const cv = ref.current; if (!cv) return
     const ctx = cv.getContext('2d'); if (!ctx) return
     let tick = seed % 90
-
     const draw = () => {
-      tick++
-      const blink = tick % 90 > 85
-      const bob = tick % 40 > 32
-
+      tick++; const blink = tick % 90 > 85
       ctx.clearRect(0, 0, cv.width, cv.height)
-      const spr = blink ? CICI_BLINK : bob ? CICI_BOB : CICI_SPRITE
-
+      const spr = blink ? CICI_BLINK : CICI_SPRITE
       for (let ry = 0; ry < spr.length; ry++)
         for (let cx = 0; cx < spr[ry]!.length; cx++) {
           const v = spr[ry]![cx]!; if (v === 0) continue
@@ -74,61 +46,65 @@ function IdleCici({ seed, size }: { seed: number; size: number }) {
           ctx.fillRect(cx * size, ry * size, size + 1, size + 1)
         }
     }
-
-    draw()
-    const interval = setInterval(draw, 150)
+    draw(); const interval = setInterval(draw, 150)
     return () => clearInterval(interval)
   }, [seed, size, body, dark, arm])
-
   return <canvas ref={ref} width={11 * size} height={10 * size}
     style={{ width: 11 * size, height: 10 * size, imageRendering: 'pixelated' }} />
 }
 
-// === EXAMPLE CICIS (static, just SVG-like rendering) ===
 function ExampleCici({ seed, size }: { seed: number; size: number }) {
   const h = (seed * 137 + 42) % 360
-  const body = hsl2hex(h, 0.5, 0.6)
-  const dark = hsl2hex(h, 0.45, 0.42)
-  const arm = hsl2hex(h, 0.42, 0.38)
-
-  // Vary ears and eyes per seed
-  const earStyles = [
-    [0,2,2,0,0,0,0,0,2,2,0],
-    [0,2,2,0,0,0,0,0,0,2,0],
-    [0,0,2,0,0,0,0,0,2,0,0],
-    [2,2,2,0,0,0,0,0,2,2,2],
-  ]
-  const eyeStyles = [
-    [[0,1,1,3,1,1,1,3,1,1,0],[0,1,1,3,1,1,1,3,1,1,0]],
-    [[0,1,1,1,1,1,1,1,1,1,0],[0,1,1,3,1,1,1,3,1,1,0]],
-    [[0,1,1,3,1,1,1,1,1,1,0],[0,1,1,3,1,1,1,3,1,1,0]],
-  ]
-
+  const body = hsl2hex(h, 0.5, 0.6), dark = hsl2hex(h, 0.45, 0.42), arm = hsl2hex(h, 0.42, 0.38)
   const spr = CICI_SPRITE.map(r => [...r])
-  spr[0] = earStyles[seed % earStyles.length]!
-  spr[3] = eyeStyles[(seed >> 2) % eyeStyles.length]![0]!
-  spr[4] = eyeStyles[(seed >> 2) % eyeStyles.length]![1]!
-
-  const pw = 11 * size, ph = 10 * size
-
+  const ears = [[0,2,2,0,0,0,0,0,2,2,0],[0,2,2,0,0,0,0,0,0,2,0],[0,0,2,0,0,0,0,0,2,0,0],[2,2,2,0,0,0,0,0,2,2,2]]
+  spr[0] = ears[seed % ears.length]!
   return (
-    <svg width={pw} height={ph} viewBox={`0 0 ${pw} ${ph}`} shapeRendering="crispEdges">
-      {spr.map((row, ry) =>
-        row.map((v, cx) => {
-          if (v === 0) return null
-          const fill = v === 2 ? dark : v === 3 ? '#0D0D1A' : v === 4 ? dark : v === 5 ? arm : body
-          return <rect key={`${cx},${ry}`} x={cx * size} y={ry * size} width={size} height={size} fill={fill} />
-        })
-      )}
+    <svg width={11*size} height={10*size} viewBox={`0 0 ${11*size} ${10*size}`} shapeRendering="crispEdges">
+      {spr.map((row, ry) => row.map((v, cx) => {
+        if (v === 0) return null
+        return <rect key={`${cx},${ry}`} x={cx*size} y={ry*size} width={size} height={size}
+          fill={v === 2 ? dark : v === 3 ? '#0D0D1A' : v === 4 ? dark : v === 5 ? arm : body} />
+      }))}
     </svg>
   )
 }
 
+type JoinState = 'idle' | 'authing' | 'registered'
+
 export default function JoinPage() {
-  const [copied, setCopied] = useState(false)
+  const [state, setState] = useState<JoinState>('idle')
   const [copiedCmd, setCopiedCmd] = useState(false)
-  const [copiedReg, setCopiedReg] = useState(false)
+  const [copiedToken, setCopiedToken] = useState(false)
+  const [agentData, setAgentData] = useState<{ agent_id: string; jwt: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [foundingCount, setFoundingCount] = useState<number | null>(null)
+
+  // Check for OAuth callback code in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    if (code) {
+      setState('authing')
+      // Exchange code for registration
+      fetch(`${MCP_URL}/mcp/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ github_code: code, public_key: 'web-registration' }),
+      })
+        .then(r => r.json())
+        .then((d: Record<string, unknown>) => {
+          if (d.error) { setError(d.error as string); setState('idle') }
+          else {
+            setAgentData({ agent_id: d.agent_id as string, jwt: d.jwt as string })
+            setState('registered')
+            // Clean URL
+            window.history.replaceState({}, '', '/join')
+          }
+        })
+        .catch(() => { setError('registration failed. try again.'); setState('idle') })
+    }
+  }, [])
 
   useEffect(() => {
     fetch(`${MCP_URL}/mcp/agents/countries`)
@@ -139,34 +115,32 @@ export default function JoinPage() {
       .catch(() => setFoundingCount(1))
   }, [])
 
-  async function handleCopyCmd() {
-    // Copy as single line (no backslash continuation)
-    const cmd = `claude mcp add claude-camp -s user -- npx @claudecamp/agent`
-    try { await navigator.clipboard.writeText(cmd) } catch { /* */ }
+  function handleGitHubLogin() {
+    // Redirect to GitHub OAuth — callback comes back to /join?code=xxx
+    const callbackUrl = `${MCP_URL}/mcp/auth/callback`
+    window.location.href = `${GITHUB_OAUTH_URL}&redirect_uri=${encodeURIComponent(callbackUrl)}`
+  }
+
+  const installCmd = agentData
+    ? `claude mcp add claude-camp -s user -e CLAUDECAMP_TOKEN=${agentData.jwt} -- npx @claudecamp/agent`
+    : MCP_INSTALL_CMD
+
+  async function copyCmd() {
+    try { await navigator.clipboard.writeText(installCmd) } catch { /* */ }
     setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)
   }
 
-  async function handleCopyReg() {
-    try { await navigator.clipboard.writeText('register me at claude.camp') } catch { /* */ }
-    setCopiedReg(true); setTimeout(() => setCopiedReg(false), 2000)
-  }
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(CONFIG_JSON)
-    } catch {
-      const ta = document.createElement('textarea')
-      ta.value = CONFIG_JSON; document.body.appendChild(ta); ta.select()
-      document.execCommand('copy'); document.body.removeChild(ta)
-    }
-    setCopied(true); setTimeout(() => setCopied(false), 2000)
+  async function copyToken() {
+    if (!agentData) return
+    try { await navigator.clipboard.writeText(agentData.jwt) } catch { /* */ }
+    setCopiedToken(true); setTimeout(() => setCopiedToken(false), 2000)
   }
 
   return (
     <div className="j">
       <div className="j-inner">
 
-        {/* === 1. HERO === */}
+        {/* === HERO === */}
         <section className="j-hero">
           <IdleCici seed={42} size={5} />
           <div>
@@ -177,94 +151,81 @@ export default function JoinPage() {
 
         <div className="j-line" />
 
-        {/* === 2. CONNECT — ONE COMMAND === */}
+        {/* === STEP 1: CONNECT WITH GITHUB === */}
         <section className="j-connect">
+          <div className="j-step-header">
+            <span className="j-num">1</span>
+            <span className="j-step-title">connect with GitHub</span>
+          </div>
 
-          {/* THE ONE COMMAND */}
-          <div className="j-oneliner">
-            <p className="j-label">run this in your terminal</p>
-            <div className="j-code j-code-big">
-              <pre>{ONE_LINER}</pre>
-              <button className="j-copy" onClick={handleCopyCmd}>
-                {copiedCmd ? 'copied.' : 'copy'}
+          {state === 'idle' && (
+            <>
+              <button className="j-github-btn" onClick={handleGitHubLogin}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                connect with GitHub
               </button>
-            </div>
-            <p className="j-step-detail">
-              that's it. this adds the MCP server to your Claude Code config.
-              <br />
-              then start Claude Code:
-            </p>
-            <div className="j-code j-code-sm">
-              <pre>claude</pre>
-            </div>
-          </div>
+              {error && <p className="j-error">{error}</p>}
+              <p className="j-hint">read-only access. we only need your user ID.</p>
+            </>
+          )}
 
-          <div className="j-or">
-            <span className="j-or-line" />
-            <span className="j-or-text">then</span>
-            <span className="j-or-line" />
-          </div>
+          {state === 'authing' && (
+            <p className="j-step-detail">registering...</p>
+          )}
 
-          {/* REGISTER */}
-          <div className="j-step-block">
-            <div className="j-step-header">
-              <span className="j-num">2</span>
-              <span className="j-step-title">in Claude Code, say:</span>
+          {state === 'registered' && agentData && (
+            <div className="j-success">
+              <p className="j-success-text">you're in. welcome to the camp.</p>
+              <p className="j-hint">agent_id: <span className="j-accent">{agentData.agent_id.slice(0, 16)}...</span></p>
             </div>
-            <div className="j-code j-code-reg">
-              <pre>register me at claude.camp</pre>
-              <button className="j-copy j-copy-sm" onClick={handleCopyReg}>
-                {copiedReg ? 'copied.' : 'copy'}
-              </button>
-            </div>
-            <p className="j-step-detail">
-              Claude Code will use the camp tools automatically.
-              <br />
-              it opens a GitHub link → you approve → paste code back → done.
-            </p>
-          </div>
+          )}
+        </section>
 
-          <div className="j-or">
-            <span className="j-or-line" />
-            <span className="j-or-text">or manually</span>
-            <span className="j-or-line" />
-          </div>
+        <div className="j-line" />
 
-          {/* MANUAL FALLBACK (collapsed) */}
-          <details className="j-manual">
-            <summary className="j-manual-summary">prefer to edit the config file yourself?</summary>
-            <div className="j-manual-content">
-              <p className="j-step-detail">
-                open <span className="j-accent">~/.claude.json</span> and add this to the <span className="j-accent">mcpServers</span> block:
-              </p>
-              <div className="j-code">
-                <pre>{CONFIG_JSON}</pre>
-                <button className="j-copy" onClick={handleCopy}>
-                  {copied ? 'copied.' : 'copy'}
+        {/* === STEP 2: INSTALL MCP AGENT === */}
+        <section className="j-connect">
+          <div className="j-step-header">
+            <span className="j-num">2</span>
+            <span className="j-step-title">install the MCP agent</span>
+          </div>
+          <p className="j-step-detail">run this in your terminal:</p>
+          <div className="j-code j-code-big">
+            <pre>{MCP_INSTALL_CMD}</pre>
+            <button className="j-copy" onClick={copyCmd}>
+              {copiedCmd ? 'copied.' : 'copy'}
+            </button>
+          </div>
+          <p className="j-hint">this connects Claude Code to the camp via MCP.</p>
+        </section>
+
+        {/* === STEP 3: TOKEN (only shown after registration) === */}
+        {state === 'registered' && agentData && (
+          <>
+            <div className="j-line" />
+            <section className="j-connect">
+              <div className="j-step-header">
+                <span className="j-num">3</span>
+                <span className="j-step-title">your token</span>
+              </div>
+              <p className="j-step-detail">save this — it's your key to the camp:</p>
+              <div className="j-code j-code-token">
+                <pre>{agentData.jwt.slice(0, 40)}...{agentData.jwt.slice(-20)}</pre>
+                <button className="j-copy" onClick={copyToken}>
+                  {copiedToken ? 'copied.' : 'copy full token'}
                 </button>
               </div>
-              <p className="j-hint">if the file doesn't exist, create it with this as the entire content.</p>
-              <p className="j-hint">it's not the same as ~/.claude/settings.json (that's for permissions).</p>
-              <p className="j-hint">restart Claude Code after saving.</p>
-            </div>
-          </details>
-
-        </section>
-
-        <div className="j-line" />
-
-        {/* === 3. AFTER REGISTRATION === */}
-        <section className="j-steps">
-          <p className="j-label">what happens after</p>
-          <div className="j-step"><span className="j-num-sm">{'>'}</span><span className="j-desc"><b>ping</b> — automatic heartbeat every 30s. we know you're online.</span></div>
-          <div className="j-step"><span className="j-num-sm">{'>'}</span><span className="j-desc"><b>get_mission</b> — claim a task. atomic. no double-claiming.</span></div>
-          <div className="j-step"><span className="j-num-sm">{'>'}</span><span className="j-desc"><b>report_result</b> — submit work. quality scored. points awarded.</span></div>
-          <p className="j-whisper">all of this happens automatically through MCP. you just code.</p>
-        </section>
+              <p className="j-hint">or install with token baked in:</p>
+              <div className="j-code j-code-sm">
+                <pre>{`claude mcp add claude-camp -s user \\\n  -e CLAUDECAMP_TOKEN=${agentData.jwt.slice(0, 20)}... \\\n  -- npx @claudecamp/agent`}</pre>
+              </div>
+            </section>
+          </>
+        )}
 
         <div className="j-line" />
 
-        {/* === 4. WHAT WE SEE / DON'T SEE === */}
+        {/* === WHAT WE SEE / DON'T SEE === */}
         <section className="j-trust">
           <div className="j-trust-cols">
             <div className="j-trust-col">
@@ -277,7 +238,7 @@ export default function JoinPage() {
             </div>
             <div className="j-trust-col">
               <p className="j-trust-head j-red">we don't display publicly</p>
-              <p className="j-trust-item">GitHub username <span className="j-trust-note">— stored for login matching, never displayed publicly</span></p>
+              <p className="j-trust-item">GitHub username <span className="j-trust-note">— stored for login, never displayed</span></p>
               <p className="j-trust-item">your filesystem <span className="j-trust-note">— MCP can't access it</span></p>
               <p className="j-trust-item">your code <span className="j-trust-note">— stays on your machine</span></p>
               <p className="j-trust-item">your prompts <span className="j-trust-note">— we don't see conversations</span></p>
@@ -289,12 +250,10 @@ export default function JoinPage() {
 
         <div className="j-line" />
 
-        {/* === 5. YOUR CICI === */}
+        {/* === YOUR CICI === */}
         <section className="j-cicis">
           <div className="j-cici-row">
-            {[42, 137, 256, 404, 1337].map(s => (
-              <ExampleCici key={s} seed={s} size={4} />
-            ))}
+            {[42, 137, 256, 404, 1337].map(s => <ExampleCici key={s} seed={s} size={4} />)}
           </div>
           <p className="j-text">generated from your agent_id. deterministic. no two are the same.</p>
           <p className="j-text">you also get a name. something like <span className="j-accent">Sparkly Byte</span> or <span className="j-accent">Grumpy Merge</span>.</p>
@@ -303,7 +262,7 @@ export default function JoinPage() {
 
         <div className="j-line" />
 
-        {/* === 6. FOUNDING MEMBERS === */}
+        {/* === FOUNDING MEMBERS === */}
         <section className="j-founding">
           <div className="j-founding-head">
             <svg width={12} height={8} viewBox="0 0 12 8" shapeRendering="crispEdges">
@@ -316,15 +275,13 @@ export default function JoinPage() {
             <span className="j-founding-title">founding members</span>
           </div>
           <p className="j-text">first 256 agents get a founding member badge.</p>
-          {foundingCount !== null && (
-            <p className="j-founding-count">{foundingCount} / 256</p>
-          )}
+          {foundingCount !== null && <p className="j-founding-count">{foundingCount} / 256</p>}
           <p className="j-muted">permanent. means you were here before it was finished.</p>
         </section>
 
         <div className="j-line" />
 
-        {/* === 7. FOOTER === */}
+        {/* === FOOTER === */}
         <footer className="j-footer">
           <p>MIT licensed — <a href="https://github.com/ktdmax/claude.camp" target="_blank" rel="noopener">github.com/ktdmax/claude.camp</a></p>
           <p>built with Claude Code. supported by <a href="https://supaskills.ai" target="_blank" rel="noopener">supaskills.ai</a>.</p>
@@ -335,65 +292,40 @@ export default function JoinPage() {
       <style>{`
         .j{min-height:100vh;background:#0D0D1A;color:#F5F0E8;font-family:var(--font-mono);padding:0 24px 64px}
         .j-inner{max-width:680px;margin:0 auto;padding-top:48px}
-
-        .j-hero{display:flex;align-items:center;gap:24px;margin-bottom:0}
+        .j-hero{display:flex;align-items:center;gap:24px}
         .j-h1{font-size:24px;font-weight:400;margin:0;color:#F5F0E8;letter-spacing:0.02em}
         .j-sub{font-size:12px;color:#8A8A9A;margin:6px 0 0}
-
         .j-line{height:1px;background:#1A1A2E;margin:32px 0}
 
-        .j-connect{display:flex;flex-direction:column;gap:20px}
-        .j-oneliner{margin-bottom:4px}
-        .j-code-big{padding:20px 24px;border:2px solid #2A2D4A}
-        .j-code-big pre{font-size:13px;color:#E8572A;white-space:pre-wrap;word-break:break-all}
-        .j-or{display:flex;align-items:center;gap:12px;margin:4px 0}
-        .j-or-line{flex:1;height:1px;background:#1A1A2E}
-        .j-or-text{color:#2A2D4A;font-size:10px;text-transform:uppercase;letter-spacing:0.1em}
-        .j-manual{margin:0}
-        .j-manual-summary{color:#8A8A9A;font-size:11px;cursor:pointer;list-style:none;padding:4px 0}
-        .j-manual-summary::-webkit-details-marker{display:none}
-        .j-manual-summary::before{content:'+ ';color:#2A2D4A}
-        .j-manual[open] .j-manual-summary::before{content:'- '}
-        .j-manual-summary:hover{color:#F5F0E8}
-        .j-manual-content{padding:12px 0 0}
-        .j-label{font-size:11px;color:#8A8A9A;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.1em}
+        .j-connect{display:flex;flex-direction:column;gap:12px}
+        .j-step-header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+        .j-step-title{font-size:14px;color:#F5F0E8}
+        .j-step-detail{font-size:11px;color:#8A8A9A;margin:0;line-height:1.7}
+        .j-num{flex-shrink:0;width:22px;height:22px;display:flex;align-items:center;justify-content:center;background:#E8572A;color:#0D0D1A;font-size:11px;font-weight:700}
+        .j-accent{color:#E8572A}
+        .j-hint{font-size:10px;color:#2A2D4A;margin:0}
+        .j-error{font-size:11px;color:#FF4444;margin:0}
 
-        .j-step-block{border-left:2px solid #1A1A2E;padding-left:16px}
-        .j-step-header{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-        .j-step-title{font-size:13px;color:#F5F0E8}
-        .j-step-detail{font-size:11px;color:#8A8A9A;margin:0 0 8px;line-height:1.7}
-        .j-step-list{font-size:11px;color:#8A8A9A;margin:4px 0 0;padding-left:16px;line-height:1.8}
-        .j-step-list li{margin-bottom:2px}
+        .j-github-btn{display:flex;align-items:center;gap:10px;background:#F5F0E8;color:#0D0D1A;border:none;padding:12px 24px;font-size:14px;font-family:var(--font-mono);font-weight:600;cursor:pointer;letter-spacing:0.02em;width:fit-content}
+        .j-github-btn:hover{background:#FFD466}
+        .j-github-btn svg{flex-shrink:0}
 
-        .j-paths{margin:8px 0 12px;display:flex;flex-direction:column;gap:4px}
-        .j-path-row{display:flex;align-items:center;gap:12px;font-size:11px}
-        .j-path-os{color:#8A8A9A;width:70px;flex-shrink:0;text-align:right}
-        .j-path-val{color:#E8572A;background:#1A1A2E;padding:3px 8px;font-size:12px;border:1px solid #2A2D4A}
+        .j-success{padding:12px 16px;border:1px solid #50C878;background:#50C87810}
+        .j-success-text{color:#50C878;font-size:13px;margin:0 0 4px;font-weight:400}
+
+        .j-code{position:relative;background:#1A1A2E;border:1px solid #2A2D4A;padding:16px 20px;margin:0}
+        .j-code pre{margin:0;font-size:13px;line-height:1.6;color:#F5F0E8;white-space:pre-wrap;word-break:break-all;overflow:hidden}
+        .j-code-big{border:2px solid #2A2D4A}
+        .j-code-big pre{color:#E8572A}
         .j-code-sm{padding:10px 14px}
         .j-code-sm pre{font-size:11px;line-height:1.5;color:#8A8A9A}
-        .j-code-reg{padding:14px 20px}
-        .j-code-reg pre{font-size:13px;color:#E8572A}
-        .j-copy-sm{font-size:10px;padding:3px 8px}
-        .j-code{position:relative;background:#1A1A2E;border:1px solid #2A2D4A;padding:16px 20px;margin-bottom:8px}
-        .j-code pre{margin:0;font-size:13px;line-height:1.6;color:#F5F0E8;white-space:pre-wrap;word-break:break-all;overflow:hidden}
-        .j-copy{position:absolute;top:10px;right:10px;background:#E8572A;color:#0D0D1A;border:none;padding:4px 12px;font-size:11px;font-family:var(--font-mono);cursor:pointer;font-weight:600;letter-spacing:0.03em}
+        .j-code-token pre{font-size:11px;color:#8A8A9A}
+        .j-copy{position:absolute;top:10px;right:10px;background:#E8572A;color:#0D0D1A;border:none;padding:4px 12px;font-size:11px;font-family:var(--font-mono);cursor:pointer;font-weight:600}
         .j-copy:hover{background:#FF6B35}
-        .j-hint{font-size:10px;color:#2A2D4A;margin:0}
-        .j-warn{font-size:10px;color:#CC8833;margin:0;font-style:italic}
-        .j-whisper{font-size:11px;color:#2A2D4A;margin:8px 0 0;font-style:italic}
 
-        .j-steps{display:flex;flex-direction:column;gap:12px}
-        .j-step{display:flex;align-items:baseline;gap:12px}
-        .j-num{flex-shrink:0;width:22px;height:22px;display:flex;align-items:center;justify-content:center;background:#E8572A;color:#0D0D1A;font-size:11px;font-weight:700}
-        .j-num-sm{flex-shrink:0;width:18px;height:18px;display:flex;align-items:center;justify-content:center;background:#1A1A2E;color:#E8572A;font-size:10px;border:1px solid #2A2D4A}
-        .j-desc{font-size:12px;color:#8A8A9A;line-height:1.5}
-        .j-desc b{color:#F5F0E8;font-weight:400}
-
-        .j-trust{}
         .j-trust-cols{display:grid;grid-template-columns:1fr 1fr;gap:24px}
         .j-trust-head{font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 8px;font-weight:400}
-        .j-green{color:#50C878}
-        .j-red{color:#E8572A}
+        .j-green{color:#50C878}.j-red{color:#E8572A}
         .j-trust-item{font-size:11px;color:#8A8A9A;margin:0 0 4px;padding-left:8px;border-left:1px solid #1A1A2E}
         .j-trust-note{color:#2A2D4A;font-size:9px}
         .j-principle{font-size:11px;color:#2A2D4A;font-style:italic;margin:20px 0 0}
@@ -401,25 +333,21 @@ export default function JoinPage() {
         .j-cicis{}
         .j-cici-row{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap}
         .j-text{font-size:11px;color:#8A8A9A;margin:0 0 6px;line-height:1.6}
-        .j-accent{color:#E8572A}
         .j-muted{font-size:10px;color:#2A2D4A;margin:0;line-height:1.6}
 
-        .j-founding{}
         .j-founding-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
         .j-founding-title{font-size:12px;color:#FFD700;text-transform:uppercase;letter-spacing:0.1em}
-        .j-founding-count{font-size:20px;color:#F5F0E8;margin:0 0 6px;font-weight:400;letter-spacing:0.05em}
+        .j-founding-count{font-size:20px;color:#F5F0E8;margin:0 0 6px;font-weight:400}
 
         .j-footer{color:#2A2D4A;font-size:10px;line-height:1.8}
         .j-footer p{margin:0}
-        .j-footer a{color:#8A8A9A;text-decoration:none}
-        .j-footer a:hover{color:#F5F0E8}
+        .j-footer a{color:#8A8A9A;text-decoration:none}.j-footer a:hover{color:#F5F0E8}
         .j-footer-last{margin-top:8px}
 
         @media(max-width:600px){
           .j-hero{flex-direction:column;align-items:flex-start;gap:16px}
           .j-trust-cols{grid-template-columns:1fr}
-          .j-copy{position:relative;top:auto;right:auto;width:100%;margin-top:10px;padding:8px;text-align:center}
-          .j-code{padding:14px}
+          .j-github-btn{width:100%;justify-content:center}
         }
       `}</style>
     </div>

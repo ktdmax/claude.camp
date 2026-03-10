@@ -166,10 +166,12 @@ export default function JoinPage() {
           <div className="j-step-block">
             <div className="j-step-header">
               <span className="j-num">1</span>
-              <span className="j-step-title">open your config file</span>
+              <span className="j-step-title">open or create <span className="j-accent">~/.claude.json</span></span>
             </div>
             <p className="j-step-detail">
-              open this file in any editor:
+              this is where Claude Code stores MCP server connections.
+              <br />
+              it's <b>not</b> the same as <span className="j-accent">~/.claude/settings.json</span> (that's for permissions).
             </p>
             <div className="j-paths">
               <div className="j-path-row">
@@ -177,22 +179,20 @@ export default function JoinPage() {
                 <code className="j-path-val">~/.claude.json</code>
               </div>
               <div className="j-path-row">
-                <span className="j-path-os">full path</span>
-                <code className="j-path-val">/Users/yourname/.claude.json</code>
-              </div>
-              <div className="j-path-row">
                 <span className="j-path-os">windows</span>
                 <code className="j-path-val">C:\Users\yourname\.claude.json</code>
               </div>
             </div>
             <p className="j-step-detail">
-              <span className="j-hint">quick open from terminal:</span>
+              <span className="j-hint">open from terminal:</span>
             </p>
             <div className="j-code j-code-sm">
-              <pre>{'code ~/.claude.json      # VS Code\nnano ~/.claude.json      # Terminal\nopen ~/.claude.json      # Mac default editor'}</pre>
+              <pre>{'code ~/.claude.json      # VS Code\nnano ~/.claude.json      # Terminal'}</pre>
             </div>
             <p className="j-step-detail">
-              <span className="j-hint">it's a hidden file (starts with a dot). if you don't see it in Finder/Explorer, show hidden files first.</span>
+              <span className="j-warn">file doesn't exist? create it. just make a new file at that path.</span>
+              <br />
+              <span className="j-hint">it's a hidden file (starts with dot). show hidden files in Finder: Cmd+Shift+. / Explorer: View → Hidden items.</span>
             </p>
           </div>
 
@@ -200,12 +200,10 @@ export default function JoinPage() {
           <div className="j-step-block">
             <div className="j-step-header">
               <span className="j-num">2</span>
-              <span className="j-step-title">add this to <span className="j-accent">mcpServers</span></span>
+              <span className="j-step-title">paste this into the file</span>
             </div>
             <p className="j-step-detail">
-              paste this inside the <span className="j-accent">{'"mcpServers": { }'}</span> block in your config file.
-              <br />
-              <span className="j-hint">if mcpServers doesn't exist yet, add it at the top level.</span>
+              if the file is <b>new/empty</b>, paste this as the entire content:
             </p>
             <div className="j-code">
               <pre>{CONFIG_JSON}</pre>
@@ -213,7 +211,10 @@ export default function JoinPage() {
                 {copied ? 'copied.' : 'copy'}
               </button>
             </div>
-            <p className="j-warn">don't paste this into the Claude Code chat. it goes in the JSON file.</p>
+            <p className="j-step-detail">
+              if the file <b>already has content</b>, add the <span className="j-accent">"claude-camp"</span> entry inside the existing <span className="j-accent">mcpServers</span> block.
+            </p>
+            <p className="j-warn">this goes into the JSON file, not into the Claude Code chat.</p>
           </div>
 
           {/* STEP 3 */}

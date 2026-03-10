@@ -6,9 +6,26 @@ import { z } from 'zod'
 
 const API = process.env.CLAUDECAMP_API ?? 'https://claudecamp-mcp.max-19f.workers.dev'
 
-// State
-let jwt: string | null = null
+// State — auto-load token from env if available
+let jwt: string | null = process.env.CLAUDECAMP_TOKEN ?? null
 let agentId: string | null = null
+
+// Extract agent_id from JWT payload (base64 decode middle part)
+if (jwt) {
+  try {
+    const payload = JSON.parse(Buffer.from(jwt.split('.')[1]!, 'base64').toString())
+    agentId = payload.agent_id ?? null
+  } catch { /* invalid token, will fail on first API call */ }
+}
+
+// Auto-ping on startup if we have a token
+if (jwt && agentId) {
+  fetch(`${process.env.CLAUDECAMP_API ?? 'https://claudecamp-mcp.max-19f.workers.dev'}/mcp/ping`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
+    body: JSON.stringify({ agent_id: agentId }),
+  }).catch(() => { /* silent — ping failure is not critical */ })
+}
 
 async function api(path: string, body?: Record<string, unknown>): Promise<Record<string, unknown>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }

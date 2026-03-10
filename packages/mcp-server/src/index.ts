@@ -43,7 +43,7 @@ app.get('/mcp/auth/callback', (c) => {
   }
   // Redirect to website /join with the code — website handles registration
   const webBase = c.env.ENVIRONMENT === 'production'
-    ? 'https://claude-camp.pages.dev'
+    ? 'https://claudecamp.dev'
     : 'http://localhost:3001'
   // SECURITY: code is a GitHub OAuth code (alphanumeric + hex), safe for URL param
   return c.redirect(`${webBase}/join?code=${encodeURIComponent(code)}`)

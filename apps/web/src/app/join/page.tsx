@@ -74,21 +74,35 @@ function ExampleCici({ seed, size }: { seed: number; size: number }) {
 type JoinState = 'idle' | 'authing' | 'registered'
 
 export default function JoinPage() {
-  const [state, setState] = useState<JoinState>('idle')
+  // Restore from localStorage
+  const saved = typeof window !== 'undefined' ? localStorage.getItem('claudecamp') : null
+  const initial = saved ? JSON.parse(saved) as { agent_id: string; jwt: string } : null
+
+  const [state, setState] = useState<JoinState>(initial ? 'registered' : 'idle')
   const [copiedCmd, setCopiedCmd] = useState(false)
   const [copiedToken, setCopiedToken] = useState(false)
-  const [agentData, setAgentData] = useState<{ agent_id: string; jwt: string } | null>(null)
+  const [agentData, setAgentData] = useState<{ agent_id: string; jwt: string } | null>(initial)
   const [error, setError] = useState<string | null>(null)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [foundingCount, setFoundingCount] = useState<number | null>(null)
 
-  // Check for OAuth callback code in URL
+  function saveSession(data: { agent_id: string; jwt: string }) {
+    setAgentData(data); setState('registered')
+    localStorage.setItem('claudecamp', JSON.stringify(data))
+  }
+
+  function clearSession() {
+    setAgentData(null); setState('idle')
+    localStorage.removeItem('claudecamp'); setShowUserMenu(false)
+  }
+
+  // Check for OAuth callback code — clean URL immediately
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
     if (code) {
+      window.history.replaceState({}, '', '/join')
       setState('authing')
-      // Exchange code for registration
       fetch(`${MCP_URL}/mcp/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -97,12 +111,7 @@ export default function JoinPage() {
         .then(r => r.json())
         .then((d: Record<string, unknown>) => {
           if (d.error) { setError(d.error as string); setState('idle') }
-          else {
-            setAgentData({ agent_id: d.agent_id as string, jwt: d.jwt as string })
-            setState('registered')
-            // Clean URL
-            window.history.replaceState({}, '', '/join')
-          }
+          else { saveSession({ agent_id: d.agent_id as string, jwt: d.jwt as string }) }
         })
         .catch(() => { setError('registration failed. try again.'); setState('idle') })
     }
@@ -159,17 +168,13 @@ export default function JoinPage() {
                 <p className="j-user-name">{ownerName(agentData.agent_id)}</p>
                 <p className="j-user-id">{agentData.agent_id.slice(0, 12)}...</p>
                 <div className="j-user-line" />
-                <button className="j-user-btn" onClick={() => {
-                  setAgentData(null); setState('idle'); setShowUserMenu(false)
-                }}>logout</button>
+                <button className="j-user-btn" onClick={clearSession}>logout</button>
                 <button className="j-user-btn j-user-btn-danger" onClick={() => {
                   if (confirm('delete your account? this removes your Cici permanently.')) {
                     fetch(`${MCP_URL}/mcp/register`, {
                       method: 'DELETE',
                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${agentData.jwt}` },
-                    }).then(() => {
-                      setAgentData(null); setState('idle'); setShowUserMenu(false)
-                    }).catch(() => {})
+                    }).then(() => clearSession()).catch(() => {})
                   }
                 }}>delete account</button>
               </div>

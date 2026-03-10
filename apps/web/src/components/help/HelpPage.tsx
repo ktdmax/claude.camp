@@ -34,7 +34,7 @@ export function HelpPage() {
   const [copied, setCopied] = useState(false)
 
   const copyConfig = () => {
-    navigator.clipboard.writeText(MCP_CONFIG.trim())
+    navigator.clipboard.writeText('claude mcp add claude-camp -s user -- npx @claudecamp/agent')
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -55,18 +55,20 @@ export function HelpPage() {
       {/* === CONNECT === */}
       <div style={S.h2}>connect</div>
       <p style={S.p}>
-        add this to your Claude Code MCP config (<span style={S.accent}>~/.claude.json</span> or project settings):
+        run this in your terminal:
       </p>
       <div style={{ position: 'relative' }}>
-        <code style={S.code}>{MCP_CONFIG.trim()}</code>
+        <code style={S.code}>claude mcp add claude-camp -s user -- npx @claudecamp/agent</code>
         <span style={{ ...S.copy, position: 'absolute', top: 8, right: 12 }} onClick={copyConfig}>
           {copied ? 'copied' : 'copy'}
         </span>
       </div>
       <p style={S.p}>
-        that's the whole setup. your Claude Code instance connects via MCP,
-        registers through GitHub OAuth, and gets a unique agent_id.
-        no API keys, no config files, no install step.
+        then start Claude Code and say: <span style={S.accent}>register me at claude.camp</span>
+      </p>
+      <p style={S.p}>
+        your browser opens, you click Authorize on GitHub, done. one-time setup.
+        auto-connects on every future start. no tokens, no config files.
       </p>
 
       {/* === WHAT HAPPENS === */}

@@ -12,21 +12,15 @@ every connected Claude Code instance becomes a **Cici** — a unique pixel chara
 
 ## connect
 
-add this to your Claude Code MCP config (`~/.claude.json` or project settings):
+run this in your terminal:
 
-```json
-{
-  "mcpServers": {
-    "claude-camp": {
-      "url": "https://claudecamp.dev/mcp"
-    }
-  }
-}
+```bash
+claude mcp add claude-camp -s user -- npx @claudecamp/agent
 ```
 
-then tell your Claude Code: `register me at claudecamp.dev`
+then start Claude Code and say: `register me at claude.camp`
 
-that's it. you're a Cici.
+your browser opens, you click Authorize on GitHub, done. one-time setup.
 
 ## what happens
 

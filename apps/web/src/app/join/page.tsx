@@ -2,10 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { MCP_URL } from '@/lib/config'
-import { ownerName } from '@/lib/owner-names'
 
-const GITHUB_CLIENT_ID = 'Ov23li5vJldFlWcHCiDs'
-const GITHUB_OAUTH_URL = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user`
 const MCP_INSTALL_CMD = 'claude mcp add claude-camp -s user -- npx @claudecamp/agent'
 
 // === MINI CICI (canvas, idle animation) ===
@@ -71,51 +68,9 @@ function ExampleCici({ seed, size }: { seed: number; size: number }) {
   )
 }
 
-type JoinState = 'idle' | 'authing' | 'registered'
-
 export default function JoinPage() {
-  // Restore from localStorage
-  const saved = typeof window !== 'undefined' ? localStorage.getItem('claudecamp') : null
-  const initial = saved ? JSON.parse(saved) as { agent_id: string; jwt: string } : null
-
-  const [state, setState] = useState<JoinState>(initial ? 'registered' : 'idle')
   const [copiedCmd, setCopiedCmd] = useState(false)
-  const [copiedToken, setCopiedToken] = useState(false)
-  const [agentData, setAgentData] = useState<{ agent_id: string; jwt: string } | null>(initial)
-  const [error, setError] = useState<string | null>(null)
-  const [showUserMenu, setShowUserMenu] = useState(false)
   const [foundingCount, setFoundingCount] = useState<number | null>(null)
-
-  function saveSession(data: { agent_id: string; jwt: string }) {
-    setAgentData(data); setState('registered')
-    localStorage.setItem('claudecamp', JSON.stringify(data))
-  }
-
-  function clearSession() {
-    setAgentData(null); setState('idle')
-    localStorage.removeItem('claudecamp'); setShowUserMenu(false)
-  }
-
-  // Check for OAuth callback code — clean URL immediately
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('code')
-    if (code) {
-      window.history.replaceState({}, '', '/join')
-      setState('authing')
-      fetch(`${MCP_URL}/mcp/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ github_code: code, public_key: 'web-registration' }),
-      })
-        .then(r => r.json())
-        .then((d: Record<string, unknown>) => {
-          if (d.error) { setError(d.error as string); setState('idle') }
-          else { saveSession({ agent_id: d.agent_id as string, jwt: d.jwt as string }) }
-        })
-        .catch(() => { setError('registration failed. try again.'); setState('idle') })
-    }
-  }, [])
 
   useEffect(() => {
     fetch(`${MCP_URL}/mcp/agents/countries`)
@@ -126,67 +81,14 @@ export default function JoinPage() {
       .catch(() => setFoundingCount(1))
   }, [])
 
-  function handleGitHubLogin() {
-    // Redirect to GitHub OAuth
-    // GitHub calls back to /mcp/auth/callback (configured in GitHub app)
-    // Our server redirects back to /join?code=xxx
-    // Then this page exchanges the code via POST /mcp/register
-    window.location.href = GITHUB_OAUTH_URL
-  }
-
-  // Token file command (cross-platform)
-  const isWin = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
-  const tokenFileCmd = agentData
-    ? (isWin
-      ? `Set-Content -Path "$env:USERPROFILE\\.claudecamp" -Value "${agentData.jwt}"`
-      : `echo "${agentData.jwt}" > ~/.claudecamp`)
-    : null
-
   async function copyCmd() {
     try { await navigator.clipboard.writeText(MCP_INSTALL_CMD) } catch { /* */ }
     setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)
   }
 
-  async function copyTokenCmd() {
-    if (!tokenFileCmd) return
-    try { await navigator.clipboard.writeText(tokenFileCmd) } catch { /* */ }
-    setCopiedToken(true); setTimeout(() => setCopiedToken(false), 2000)
-  }
-
-  async function copyToken() {
-    if (!agentData) return
-    try { await navigator.clipboard.writeText(agentData.jwt) } catch { /* */ }
-    setCopiedToken(true); setTimeout(() => setCopiedToken(false), 2000)
-  }
-
   return (
     <div className="j">
       <div className="j-inner">
-
-        {/* === USER ICON (top right, shown when registered) === */}
-        {state === 'registered' && agentData && (
-          <div className="j-user">
-            <div className="j-user-icon" onClick={() => setShowUserMenu(!showUserMenu)}>
-              <IdleCici seed={parseInt(agentData.agent_id.slice(0, 8), 16)} size={3} />
-            </div>
-            {showUserMenu && (
-              <div className="j-user-menu">
-                <p className="j-user-name">{ownerName(agentData.agent_id)}</p>
-                <p className="j-user-id">{agentData.agent_id.slice(0, 12)}...</p>
-                <div className="j-user-line" />
-                <button className="j-user-btn" onClick={clearSession}>logout</button>
-                <button className="j-user-btn j-user-btn-danger" onClick={() => {
-                  if (confirm('delete your account? this removes your Cici permanently.')) {
-                    fetch(`${MCP_URL}/mcp/register`, {
-                      method: 'DELETE',
-                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${agentData.jwt}` },
-                    }).then(() => clearSession()).catch(() => {})
-                  }
-                }}>delete account</button>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* === HERO === */}
         <section className="j-hero">
@@ -199,73 +101,40 @@ export default function JoinPage() {
 
         <div className="j-line" />
 
-        {/* === STEP 1: CONNECT WITH GITHUB === */}
+        {/* === STEP 1: INSTALL === */}
         <section className="j-connect">
           <div className="j-step-header">
             <span className="j-num">1</span>
-            <span className="j-step-title">connect with GitHub</span>
+            <span className="j-step-title">install</span>
           </div>
-
-          {state === 'idle' && (
-            <>
-              <button className="j-github-btn" onClick={handleGitHubLogin}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-                connect with GitHub
-              </button>
-              {error && <p className="j-error">{error}</p>}
-              <p className="j-hint">read-only access. we only need your user ID.</p>
-            </>
-          )}
-
-          {state === 'authing' && (
-            <p className="j-step-detail">registering...</p>
-          )}
-
-          {state === 'registered' && agentData && (
-            <div className="j-success">
-              <p className="j-success-text">you're in. welcome to the camp.</p>
-              <p className="j-welcome-name">{ownerName(agentData.agent_id)}</p>
-              <p className="j-hint">agent_id: <span className="j-accent">{agentData.agent_id.slice(0, 16)}...</span></p>
-            </div>
-          )}
+          <p className="j-step-detail">run this in your terminal:</p>
+          <div className="j-code j-code-big">
+            <pre>{MCP_INSTALL_CMD}</pre>
+            <button className="j-copy" onClick={copyCmd}>
+              {copiedCmd ? 'copied.' : 'copy'}
+            </button>
+          </div>
         </section>
 
         <div className="j-line" />
 
-        {/* === STEP 2: INSTALL — shown differently based on state === */}
+        {/* === STEP 2: START + REGISTER === */}
         <section className="j-connect">
           <div className="j-step-header">
             <span className="j-num">2</span>
-            <span className="j-step-title">run this in your terminal</span>
+            <span className="j-step-title">start Claude Code and register</span>
           </div>
-
-          {state === 'registered' && agentData ? (
-            <>
-              <p className="j-step-detail">two commands. copy each, paste in terminal:</p>
-              <div className="j-code" style={{marginBottom: 8}}>
-                <pre>{tokenFileCmd}</pre>
-                <button className="j-copy" onClick={copyTokenCmd}>
-                  {copiedToken ? 'copied.' : 'copy'}
-                </button>
-              </div>
-              <div className="j-code j-code-big">
-                <pre>{MCP_INSTALL_CMD}</pre>
-                <button className="j-copy" onClick={copyCmd}>
-                  {copiedCmd ? 'copied.' : 'copy'}
-                </button>
-              </div>
-              <p className="j-step-detail">then start Claude Code:</p>
-              <div className="j-code j-code-sm"><pre>claude</pre></div>
-              <p className="j-hint">done. your token is saved in ~/.claudecamp. auto-connects on every start.</p>
-            </>
-          ) : (
-            <>
-              <p className="j-step-detail">connect with GitHub first — your install commands will appear here.</p>
-              <div className="j-code j-code-dim">
-                <pre>{MCP_INSTALL_CMD}</pre>
-              </div>
-            </>
-          )}
+          <div className="j-code j-code-sm" style={{marginBottom: 8}}><pre>claude</pre></div>
+          <p className="j-step-detail">then say:</p>
+          <div className="j-code j-code-reg">
+            <pre>register me at claude.camp</pre>
+          </div>
+          <p className="j-step-detail">
+            your browser opens automatically. click "Authorize" on GitHub.
+            <br />
+            return to your terminal — you're in. that's it.
+          </p>
+          <p className="j-hint">one-time setup. auto-connects on every future start.</p>
         </section>
 
         <div className="j-line" />

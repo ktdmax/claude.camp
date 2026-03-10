@@ -6,7 +6,7 @@ import { MCP_URL } from '@/lib/config'
 const MCP_ENDPOINT = 'https://claudecamp.dev/mcp'
 
 const ONE_LINER = `claude mcp add claude-camp \\
-  --transport http ${MCP_ENDPOINT}`
+  --transport http -s user ${MCP_ENDPOINT}`
 
 const CONFIG_JSON = `{
   "mcpServers": {
@@ -142,7 +142,7 @@ export default function JoinPage() {
 
   async function handleCopyCmd() {
     // Copy as single line (no backslash continuation)
-    const cmd = `claude mcp add claude-camp --transport http ${MCP_ENDPOINT}`
+    const cmd = `claude mcp add claude-camp --transport http -s user ${MCP_ENDPOINT}`
     try { await navigator.clipboard.writeText(cmd) } catch { /* */ }
     setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)
   }

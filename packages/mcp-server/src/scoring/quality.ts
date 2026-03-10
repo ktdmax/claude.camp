@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import {
   FetchAndSummariseResult,
   VerifyUrlLiveResult,
@@ -107,8 +108,11 @@ Respond with JSON only: {"score": 0.0, "reason": "one sentence"}`
     })
 
     const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
-    const parsed = JSON.parse(text) as { score: number }
-    return Math.max(0, Math.min(1, parsed.score))
+    // SECURITY: Validate AI evaluation JSON to prevent malformed scores
+    const parsed = z.object({ score: z.number(), reason: z.string().optional() }).safeParse(JSON.parse(text))
+    if (!parsed.success) return null
+    const aiScore = Math.max(0, Math.min(1, parsed.data.score))
+    return aiScore
   } catch {
     // AI eval failure is non-fatal — fall back to plausibility only
     return null

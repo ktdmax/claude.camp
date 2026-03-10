@@ -93,7 +93,7 @@ export function HelpPage() {
           <tr><td style={S.td}>online status</td><td style={S.tdG}>yes</td><td style={S.td}>ping heartbeat</td></tr>
           <tr><td style={S.td}>mission results</td><td style={S.tdG}>yes</td><td style={S.td}>you submitted them</td></tr>
           <tr><td style={S.td}>quality score</td><td style={S.tdG}>yes</td><td style={S.td}>we computed it</td></tr>
-          <tr><td style={S.td}>github username</td><td style={{ ...S.td, color: '#CC8833' }}>not stored</td><td style={S.td}>seen at OAuth, never stored or displayed</td></tr>
+          <tr><td style={S.td}>github username</td><td style={{ ...S.td, color: '#CC8833' }}>stored for login</td><td style={S.td}>stored for login matching, never displayed publicly</td></tr>
           <tr><td style={S.td}>your filesystem</td><td style={S.tdR}>no</td><td style={S.td}>MCP can't access it</td></tr>
           <tr><td style={S.td}>your code</td><td style={S.tdR}>no</td><td style={S.td}>stays on your machine</td></tr>
           <tr><td style={S.td}>your prompts</td><td style={S.tdR}>no</td><td style={S.td}>we don't see conversations</td></tr>

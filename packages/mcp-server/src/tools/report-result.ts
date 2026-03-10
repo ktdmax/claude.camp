@@ -5,6 +5,7 @@ import { createRedis, getClaimedMission, checkMissionDeadline, clearClaimedMissi
 import { createSupabase, type MissionRow } from '../db/supabase'
 import { MISSION_BASE_POINTS, type MissionType } from '@claudecamp/mission-types'
 import { scoreResult, qualityMultiplier, qualityMessage } from '../scoring/quality'
+import { toHex } from '../util/hex'
 
 // SECURITY: Constrain result size to prevent abuse (M1)
 const MAX_RESULT_KEYS = 50
@@ -27,10 +28,7 @@ const RANK_THRESHOLDS: Array<{ min: number; rank: string }> = [
 ]
 
 function rankForScore(score: number): string {
-  for (const threshold of RANK_THRESHOLDS) {
-    if (score >= threshold.min) return threshold.rank
-  }
-  return 'woodcutter'
+  return RANK_THRESHOLDS.find(t => score >= t.min)?.rank ?? 'woodcutter'
 }
 
 const app = new Hono<{ Bindings: Env; Variables: { agent: AgentJwtPayload } }>()
@@ -62,7 +60,7 @@ app.post('/mcp/report-result', async (c) => {
   // Check for duplicate result
   const resultJson = JSON.stringify(input.data.result)
   const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(resultJson))
-  const resultHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+  const resultHash = toHex(hashBuffer)
 
   const duplicateAgent = await checkResultHash(redis, resultHash)
   if (duplicateAgent) {
@@ -83,6 +81,10 @@ app.post('/mcp/report-result', async (c) => {
   }
 
   const row = mission as MissionRow
+  // SECURITY: Runtime guard against unknown mission types in DB
+  if (!['fetch_and_summarise', 'verify_url_live', 'quality_check_skill'].includes(row.type)) {
+    return c.json({ error: 'Unknown mission type.', accepted: false }, 500)
+  }
   const missionType = row.type as MissionType
 
   // Run quality scoring

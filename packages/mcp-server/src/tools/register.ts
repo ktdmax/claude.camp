@@ -5,6 +5,7 @@ import { exchangeCodeForUser } from '../auth/github-oauth'
 import { signJwt } from '../auth/jwt'
 import { createSupabase } from '../db/supabase'
 import { createRedis, checkRegisterRateLimit } from '../db/redis'
+import { toHex } from '../util/hex'
 
 const RegisterInput = z.object({
   github_code: z.string().min(1),
@@ -15,7 +16,7 @@ const RegisterInput = z.object({
 async function computeOwnerHash(githubId: number, salt: string): Promise<string> {
   const raw = `${githubId}${salt}owner`
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return toHex(buf)
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -68,9 +69,9 @@ app.post('/mcp/register', async (c) => {
   } else {
     // Generate agent_id: SHA-256(github_id + timestamp + random salt)
     const salt = crypto.getRandomValues(new Uint8Array(32))
-    const raw = `${githubUser.github_id}:${Date.now()}:${Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('')}`
+    const raw = `${githubUser.github_id}:${Date.now()}:${toHex(salt.buffer)}`
     const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
-    agentId = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+    agentId = toHex(hashBuffer)
 
     // SECURITY: owner_hash salted with server secret to prevent enumeration of github_ids (M4)
     const ownerHash = await computeOwnerHash(githubUser.github_id, c.env.JWT_PRIVATE_KEY)

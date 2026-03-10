@@ -341,10 +341,8 @@ export function Cici({ traits, size = PX, label, animated = false, animDelay }: 
 
     const frames = buildFrames(grid)
     let frameIdx = Math.floor(phase * 3) % frames.length
-    let tick = 0
 
     const interval = setInterval(() => {
-      tick++
       frameIdx = (frameIdx + 1) % frames.length
 
       const frame = frames[frameIdx]!

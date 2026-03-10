@@ -431,8 +431,7 @@ export function WorldMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [total, setTotal] = useState(0)
   const [tooltip, setTooltip] = useState<{x:number;y:number;name:string;country:string}|null>(null)
-  // TODO: implement filter — toggle exists in UI but filtering is not yet wired up
-  const [showMine, setShowMine] = useState(false)
+  // TODO: agent filter (show mine vs all) — needs auth context
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [biomeName, setBiomeName] = useState('forest')
   const agentsRef = useRef<Agent[]>([])
@@ -876,10 +875,6 @@ export function WorldMap() {
       <div className="wm-bar">
         <a href="/">← fire</a>
         <span>the camp</span>
-        <div className="wm-toggle" onClick={() => setShowMine(!showMine)}>
-          <span className={showMine ? 'wm-tog-off' : 'wm-tog-on'}>all</span>
-          <span className={showMine ? 'wm-tog-on' : 'wm-tog-off'}>mine</span>
-        </div>
         <div className="wm-toggle" onClick={() => {
           const idx = BIOMES.findIndex(b => b.name === biomeName)
           const next = BIOMES[(idx + 1) % BIOMES.length]!

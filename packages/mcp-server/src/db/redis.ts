@@ -104,12 +104,6 @@ export async function getOnlineCount(redis: Redis): Promise<number> {
   return await redis.scard('presence:online')
 }
 
-// SECURITY: Remove agent from online set when presence expires (H5)
-// Call this during cleanup or when an agent is known to be offline
-export async function removePresence(redis: Redis, agentId: string): Promise<void> {
-  await redis.srem('presence:online', agentId)
-}
-
 // SECURITY: Full cleanup of stale members from presence:online SET (M3)
 // Called from /mcp/health (infrequent) to keep the SET accurate
 export async function cleanPresenceSet(redis: Redis): Promise<void> {

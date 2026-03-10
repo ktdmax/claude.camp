@@ -30,6 +30,10 @@ app.post('/mcp/get-mission', async (c) => {
 
     if (mission) {
       const row = mission as MissionRow
+      // SECURITY: Runtime guard against unknown mission types in DB
+      if (!['fetch_and_summarise', 'verify_url_live', 'quality_check_skill'].includes(row.type)) {
+        return c.json({ error: 'Unknown mission type.' }, 500)
+      }
       const missionType = row.type as MissionType
       return c.json({
         mission_id: row.mission_id,
@@ -65,6 +69,10 @@ app.post('/mcp/get-mission', async (c) => {
   }
 
   const row = mission as MissionRow
+  // SECURITY: Runtime guard against unknown mission types in DB
+  if (!['fetch_and_summarise', 'verify_url_live', 'quality_check_skill'].includes(row.type)) {
+    return c.json({ error: 'Unknown mission type.' }, 500)
+  }
   const missionType = row.type as MissionType
   const deadlineSeconds = MISSION_DEADLINE_SECONDS
 

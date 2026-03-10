@@ -79,6 +79,7 @@ export default function JoinPage() {
   const [copiedToken, setCopiedToken] = useState(false)
   const [agentData, setAgentData] = useState<{ agent_id: string; jwt: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showUserMenu, setShowUserMenu] = useState(false)
   const [foundingCount, setFoundingCount] = useState<number | null>(null)
 
   // Check for OAuth callback code in URL
@@ -146,6 +147,35 @@ export default function JoinPage() {
   return (
     <div className="j">
       <div className="j-inner">
+
+        {/* === USER ICON (top right, shown when registered) === */}
+        {state === 'registered' && agentData && (
+          <div className="j-user">
+            <div className="j-user-icon" onClick={() => setShowUserMenu(!showUserMenu)}>
+              <IdleCici seed={parseInt(agentData.agent_id.slice(0, 8), 16)} size={3} />
+            </div>
+            {showUserMenu && (
+              <div className="j-user-menu">
+                <p className="j-user-name">{ownerName(agentData.agent_id)}</p>
+                <p className="j-user-id">{agentData.agent_id.slice(0, 12)}...</p>
+                <div className="j-user-line" />
+                <button className="j-user-btn" onClick={() => {
+                  setAgentData(null); setState('idle'); setShowUserMenu(false)
+                }}>logout</button>
+                <button className="j-user-btn j-user-btn-danger" onClick={() => {
+                  if (confirm('delete your account? this removes your Cici permanently.')) {
+                    fetch(`${MCP_URL}/mcp/register`, {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${agentData.jwt}` },
+                    }).then(() => {
+                      setAgentData(null); setState('idle'); setShowUserMenu(false)
+                    }).catch(() => {})
+                  }
+                }}>delete account</button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* === HERO === */}
         <section className="j-hero">
@@ -291,6 +321,18 @@ export default function JoinPage() {
       <style>{`
         .j{min-height:100vh;background:#0D0D1A;color:#F5F0E8;font-family:var(--font-mono);padding:0 24px 64px}
         .j-inner{max-width:680px;margin:0 auto;padding-top:48px}
+        .j-user{position:fixed;top:16px;right:16px;z-index:10}
+        .j-user-icon{cursor:pointer;opacity:0.7;transition:opacity .15s}
+        .j-user-icon:hover{opacity:1}
+        .j-user-menu{position:absolute;top:100%;right:0;margin-top:8px;background:#0D0D1A;border:1px solid #1A1A2E;padding:12px 16px;min-width:160px;animation:fadeIn .15s ease-out}
+        .j-user-name{color:#E8572A;font-size:12px;margin:0 0 2px;font-family:var(--font-mono)}
+        .j-user-id{color:#2A2D4A;font-size:9px;margin:0;font-family:var(--font-mono)}
+        .j-user-line{height:1px;background:#1A1A2E;margin:8px 0}
+        .j-user-btn{display:block;width:100%;background:none;border:none;color:#8A8A9A;font-size:11px;font-family:var(--font-mono);padding:4px 0;cursor:pointer;text-align:left}
+        .j-user-btn:hover{color:#F5F0E8}
+        .j-user-btn-danger{color:#2A2D4A}
+        .j-user-btn-danger:hover{color:#FF4444}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
         .j-hero{display:flex;align-items:center;gap:24px}
         .j-h1{font-size:24px;font-weight:400;margin:0;color:#F5F0E8;letter-spacing:0.02em}
         .j-sub{font-size:12px;color:#8A8A9A;margin:6px 0 0}

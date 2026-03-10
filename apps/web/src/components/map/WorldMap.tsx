@@ -368,6 +368,7 @@ type Agent = {
 
 // === CICI CARD ===
 import { getPhrase } from './phrases'
+import { ownerName } from '@/lib/owner-names'
 
 function CiciCard({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const cardCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -413,6 +414,7 @@ function CiciCard({ agent, onClose }: { agent: Agent; onClose: () => void }) {
         <div className="cc-close" onClick={onClose}>x</div>
         <div className="cc-name">{agent.name}</div>
         <div className="cc-country">{agent.country}</div>
+        <div className="cc-owner">one of {ownerName(agent.seed.toString())}&apos;s Cicis</div>
         <canvas ref={cardCanvasRef} width={80} height={100} className="cc-canvas" />
         <div className="cc-divider" />
         <div className="cc-phrase">{phrase}</div>
@@ -928,7 +930,8 @@ export function WorldMap() {
         .cc-card{background:#0D0D1A;border:2px solid #2A2D4A;padding:20px;width:220px;position:relative;animation:cardIn .2s ease-out;image-rendering:pixelated}
         .cc-close{position:absolute;top:8px;right:10px;color:#8A8A9A;font-family:monospace;font-size:10px;cursor:pointer}.cc-close:hover{color:#F5F0E8}
         .cc-name{color:#E8572A;font-family:monospace;font-size:13px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px}
-        .cc-country{color:#8A8A9A;font-family:monospace;font-size:9px;margin-bottom:12px}
+        .cc-country{color:#8A8A9A;font-family:monospace;font-size:9px;margin-bottom:2px}
+        .cc-owner{color:#4A9EFF;font-family:monospace;font-size:9px;margin-bottom:12px}
         .cc-canvas{display:block;margin:0 auto 12px;image-rendering:pixelated;width:80px;height:100px}
         .cc-divider{height:1px;background:#1A1A2E;margin:0 0 10px}
         .cc-phrase{color:#F5F0E8;font-family:monospace;font-size:10px;line-height:1.5;margin-bottom:10px;font-style:italic;min-height:30px}

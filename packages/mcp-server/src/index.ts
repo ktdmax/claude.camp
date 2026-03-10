@@ -70,6 +70,39 @@ app.get('/mcp/agents/countries', async (c) => {
   return c.json({ countries: counts })
 })
 
+// Public API: owner aggregation (one owner = one GitHub user, multiple Cicis)
+app.get('/mcp/owners', async (c) => {
+  const supabase = createSupabase(c.env)
+  const { data } = await supabase
+    .from('agents')
+    .select('owner_hash, country')
+    .not('owner_hash', 'is', null)
+
+  // Aggregate by owner_hash
+  const owners = new Map<string, { countries: Set<string> ; count: number }>()
+  for (const row of data ?? []) {
+    const r = row as { owner_hash: string; country: string | null }
+    const entry = owners.get(r.owner_hash) ?? { countries: new Set<string>(), count: 0 }
+    entry.count++
+    if (r.country) entry.countries.add(r.country)
+    owners.set(r.owner_hash, entry)
+  }
+
+  const ownerList = Array.from(owners.entries()).map(([hash, v]) => ({
+    owner_hash: hash,
+    cici_count: v.count,
+    countries: Array.from(v.countries),
+  }))
+
+  const totalCicis = ownerList.reduce((sum, o) => sum + o.cici_count, 0)
+
+  return c.json({
+    owners: ownerList,
+    total_owners: ownerList.length,
+    total_cicis: totalCicis,
+  })
+})
+
 app.get('/mcp/health', async (c) => {
   const redis = createRedis(c.env)
   const agentsOnline = await getOnlineCount(redis)

@@ -41,10 +41,15 @@ app.post('/mcp/register', async (c) => {
   if (existing) {
     agentId = existing.agent_id
 
-    // Update public key and location if changed
+    // SECURITY: owner_hash derived from immutable github_id, not mutable username
+    const ownerRaw = `${githubUser.github_id}owner`
+    const ownerBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ownerRaw))
+    const ownerHash = Array.from(new Uint8Array(ownerBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
+
+    // Update public key, location, and backfill owner_hash if missing
     await supabase
       .from('agents')
-      .update({ public_key: input.data.public_key, github_username: githubUser.login, country: githubUser.location })
+      .update({ public_key: input.data.public_key, github_username: githubUser.login, country: githubUser.location, owner_hash: ownerHash })
       .eq('agent_id', agentId)
   } else {
     // Generate agent_id: SHA-256(github_id + timestamp + random salt)
@@ -53,6 +58,11 @@ app.post('/mcp/register', async (c) => {
     const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
     agentId = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
 
+    // SECURITY: owner_hash derived from immutable github_id, not mutable username
+    const ownerRaw = `${githubUser.github_id}owner`
+    const ownerBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ownerRaw))
+    const ownerHash = Array.from(new Uint8Array(ownerBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
+
     const { error } = await supabase.from('agents').insert({
       agent_id: agentId,
       github_id: githubUser.github_id,
@@ -60,6 +70,7 @@ app.post('/mcp/register', async (c) => {
       public_key: input.data.public_key,
       country: githubUser.location,
       rank: 'woodcutter',
+      owner_hash: ownerHash,
     })
 
     if (error) {

@@ -147,7 +147,7 @@ export default function JoinPage() {
   }
 
   async function handleCopyReg() {
-    try { await navigator.clipboard.writeText('register me') } catch { /* */ }
+    try { await navigator.clipboard.writeText('register me at claude.camp') } catch { /* */ }
     setCopiedReg(true); setTimeout(() => setCopiedReg(false), 2000)
   }
 
@@ -212,7 +212,7 @@ export default function JoinPage() {
               <span className="j-step-title">in Claude Code, say:</span>
             </div>
             <div className="j-code j-code-reg">
-              <pre>register me</pre>
+              <pre>register me at claude.camp</pre>
               <button className="j-copy j-copy-sm" onClick={handleCopyReg}>
                 {copiedReg ? 'copied.' : 'copy'}
               </button>

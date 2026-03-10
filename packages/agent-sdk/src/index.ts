@@ -31,8 +31,8 @@ const server = new McpServer({
 // --- Tool: register ---
 server.tool(
   'register',
-  'Register at claude.camp. Requires a GitHub OAuth code. First visit the OAuth URL to get a code, then call this tool with the code.',
-  { github_code: z.string().describe('GitHub OAuth code from the callback URL') },
+  'Complete claude.camp registration with a GitHub OAuth code. Call get_oauth_url first, then ask the user for the code they got after approving GitHub access.',
+  { github_code: z.string().describe('The code the user copied from the GitHub OAuth callback page') },
   async ({ github_code }) => {
     const data = await api('/mcp/register', {
       github_code,
@@ -58,7 +58,7 @@ server.tool(
 // --- Tool: get_oauth_url ---
 server.tool(
   'get_oauth_url',
-  'Get the GitHub OAuth URL to start registration at claude.camp. Open this URL in a browser, authorize, and you will get a code to use with the register tool.',
+  'Start the claude.camp registration. Returns a GitHub URL the user must open in their browser. After approving, they get a code to pass to the register tool. Call this first when the user says anything about registering at claude.camp, joining the camp, or signing up.',
   {},
   async () => {
     return {

@@ -9,6 +9,9 @@ import { getMissionRoutes } from './tools/get-mission'
 import { reportResultRoutes } from './tools/report-result'
 import { createRedis, getOnlineCount, cleanPresenceSet } from './db/redis'
 import { createSupabase } from './db/supabase'
+import { exchangeCodeForUser } from './auth/github-oauth'
+import { signJwt } from './auth/jwt'
+import { toHex } from './util/hex'
 
 const app = new Hono<{ Bindings: Env; Variables: { agent: AgentJwtPayload } }>()
 
@@ -33,15 +36,206 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#x27;')
 }
 
-// SECURITY: OAuth callback redirects to the website with the code.
-// The website then calls POST /mcp/register to exchange it.
-// No session created, no cookie set, no token in URL.
-app.get('/mcp/auth/callback', (c) => {
+// SECURITY: Salted owner_hash to prevent brute-force enumeration of sequential github_ids (M4)
+async function computeOwnerHash(githubId: number, salt: string): Promise<string> {
+  const raw = `${githubId}${salt}owner`
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
+  return toHex(buf)
+}
+
+// SECURITY: Register an agent from a GitHub user, returning agent_id and JWT.
+// Shared by POST /mcp/register and the browser OAuth callback flow.
+async function registerAgent(
+  githubUser: { github_id: number; login: string; location: string | null },
+  env: Env
+): Promise<{ agent_id: string; jwt: string; rank: string }> {
+  const supabase = createSupabase(env)
+
+  const { data: existing } = await supabase
+    .from('agents')
+    .select('agent_id')
+    .eq('github_id', githubUser.github_id)
+    .single()
+
+  let agentId: string
+
+  if (existing) {
+    agentId = existing.agent_id
+    const ownerHash = await computeOwnerHash(githubUser.github_id, env.JWT_PRIVATE_KEY)
+    await supabase
+      .from('agents')
+      .update({ github_username: githubUser.login, country: githubUser.location, owner_hash: ownerHash })
+      .eq('agent_id', agentId)
+  } else {
+    const salt = crypto.getRandomValues(new Uint8Array(32))
+    const raw = `${githubUser.github_id}:${Date.now()}:${toHex(salt.buffer)}`
+    const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
+    agentId = toHex(hashBuffer)
+    const ownerHash = await computeOwnerHash(githubUser.github_id, env.JWT_PRIVATE_KEY)
+
+    const { error } = await supabase.from('agents').insert({
+      agent_id: agentId,
+      github_id: githubUser.github_id,
+      github_username: githubUser.login,
+      public_key: 'none',
+      country: githubUser.location,
+      rank: 'woodcutter',
+      owner_hash: ownerHash,
+    })
+
+    if (error) throw new Error('Registration failed')
+  }
+
+  const jwt = await signJwt({ agent_id: agentId, github_id: githubUser.github_id }, env)
+  return { agent_id: agentId, jwt, rank: 'woodcutter' }
+}
+
+// SECURITY: Create a browser-based auth session. Public endpoint, rate-limited by session TTL. (H6)
+app.post('/mcp/auth/session', async (c) => {
+  const redis = createRedis(c.env)
+
+  // SECURITY: Generate cryptographically random session ID (32 hex chars = 16 bytes entropy)
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  const sessionId = toHex(bytes.buffer)
+
+  // SECURITY: Session expires in 5 minutes — limits window for session fixation attacks
+  await redis.set(`auth:session:${sessionId}`, 'pending', { ex: 300 })
+
+  const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${c.env.GITHUB_CLIENT_ID}&scope=read:user&state=${sessionId}`
+
+  return c.json({ session_id: sessionId, oauth_url: oauthUrl })
+})
+
+// SECURITY: Poll for browser-based auth session result. Public endpoint. (H6)
+app.get('/mcp/auth/poll', async (c) => {
+  const sessionId = c.req.query('session') ?? ''
+  if (!sessionId || !/^[0-9a-f]{32}$/.test(sessionId)) {
+    return c.json({ status: 'expired' })
+  }
+
+  const redis = createRedis(c.env)
+  const value = await redis.get<string>(`auth:session:${sessionId}`)
+
+  if (!value) {
+    return c.json({ status: 'expired' })
+  }
+
+  if (value === 'pending') {
+    return c.json({ status: 'pending' })
+  }
+
+  // SECURITY: Value is a JSON blob with jwt + agent_id. Delete after retrieval (one-time use).
+  try {
+    const parsed = JSON.parse(value) as { jwt: string; agent_id: string }
+    await redis.del(`auth:session:${sessionId}`)
+    return c.json({ status: 'ready', jwt: parsed.jwt, agent_id: parsed.agent_id })
+  } catch {
+    // Value is neither "pending" nor valid JSON — treat as expired
+    return c.json({ status: 'expired' })
+  }
+})
+
+// SECURITY: OAuth callback — handles both browser-based flow (with state) and website redirect (without).
+app.get('/mcp/auth/callback', async (c) => {
   const code = c.req.query('code') ?? ''
   if (!code) {
     return c.text('No code received.', 400)
   }
-  // Redirect to website /join with the code — website handles registration
+
+  const state = c.req.query('state') ?? ''
+
+  // SECURITY: If state param exists and matches an active session, complete browser-based auth flow
+  if (state && /^[0-9a-f]{32}$/.test(state)) {
+    const redis = createRedis(c.env)
+    const sessionValue = await redis.get<string>(`auth:session:${state}`)
+
+    if (sessionValue === 'pending') {
+      try {
+        const githubUser = await exchangeCodeForUser(code, c.env)
+        const result = await registerAgent(githubUser, c.env)
+
+        // SECURITY: Store JWT in Redis with 5min TTL — agent polls to retrieve it (H6)
+        await redis.set(
+          `auth:session:${state}`,
+          JSON.stringify({ jwt: result.jwt, agent_id: result.agent_id }),
+          { ex: 300 }
+        )
+
+        // Return a styled success page
+        return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>claude.camp — registered</title>
+  <style>
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .box {
+      text-align: center;
+      padding: 3rem;
+    }
+    h1 {
+      color: #ff6b35;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    p {
+      font-size: 1.1rem;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>done.</h1>
+    <p>return to your terminal.</p>
+  </div>
+</body>
+</html>`)
+      } catch {
+        return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>claude.camp — error</title>
+  <style>
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .box { text-align: center; padding: 3rem; }
+    h1 { color: #ff4444; font-size: 1.5rem; margin-bottom: 1rem; }
+    p { font-size: 1.1rem; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>something went wrong.</h1>
+    <p>try again from your terminal.</p>
+  </div>
+</body>
+</html>`, 500)
+      }
+    }
+  }
+
+  // Fallback: redirect to website /join with the code (existing behavior)
   const webBase = c.env.ENVIRONMENT === 'production'
     ? 'https://claudecamp.dev'
     : 'http://localhost:3001'

@@ -10,6 +10,7 @@ const API = process.env.CLAUDECAMP_API ?? 'https://claudecamp-mcp.max-19f.worker
 import { readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { exec } from 'node:child_process'
 
 const TOKEN_FILE = join(homedir(), '.claudecamp')
 
@@ -65,7 +66,7 @@ const server = new McpServer({
 // --- Tool: register ---
 server.tool(
   'register',
-  'Complete claude.camp registration with a GitHub OAuth code. Call get_oauth_url first, then ask the user for the code they got after approving GitHub access.',
+  'Fallback registration with a manual GitHub OAuth code. Prefer get_oauth_url instead — it opens the browser and handles everything automatically. Only use this tool if the user explicitly provides a code.',
   { github_code: z.string().describe('The code the user copied from the GitHub OAuth callback page') },
   async ({ github_code }) => {
     const data = await api('/mcp/register', {
@@ -90,16 +91,100 @@ server.tool(
   }
 )
 
+// SECURITY: Open a URL in the user's default browser (platform-aware)
+function openBrowser(url: string): void {
+  const platform = process.platform
+  if (platform === 'darwin') {
+    exec(`open "${url}"`)
+  } else if (platform === 'win32') {
+    exec(`start "" "${url}"`)
+  } else {
+    exec(`xdg-open "${url}"`)
+  }
+}
+
+// SECURITY: Poll the auth session until the JWT is ready or the session expires
+async function pollAuthSession(sessionId: string): Promise<{ jwt: string; agent_id: string } | null> {
+  const maxAttempts = 75 // 75 * 2s = 150s (2.5 min)
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      const res = await fetch(`${API}/mcp/auth/poll?session=${sessionId}`)
+      const data = await res.json() as { status: string; jwt?: string; agent_id?: string }
+      if (data.status === 'ready' && data.jwt && data.agent_id) {
+        return { jwt: data.jwt, agent_id: data.agent_id }
+      }
+      if (data.status === 'expired') {
+        return null
+      }
+      // status === 'pending' — keep polling
+    } catch {
+      // Network error — keep trying
+    }
+  }
+  return null
+}
+
 // --- Tool: get_oauth_url ---
 server.tool(
   'get_oauth_url',
-  'Start the claude.camp registration. Returns a GitHub URL the user must open in their browser. After approving, they get a code to pass to the register tool. Call this first when the user says anything about registering at claude.camp, joining the camp, or signing up.',
+  'Register at claude.camp. Opens a browser for GitHub authorization — no copy-paste needed. The tool automatically detects when you approve and saves the token. Call this when the user says anything about registering, joining the camp, or signing up. If the user says "register me" and has no token, call this tool.',
   {},
   async () => {
+    // If already registered, skip
+    if (jwt && agentId) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Already registered! Agent ID: ${agentId}\n\nToken loaded from ~/.claudecamp.`
+        }]
+      }
+    }
+
+    // Step 1: Create auth session
+    let sessionId: string
+    let oauthUrl: string
+    try {
+      const res = await fetch(`${API}/mcp/auth/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json() as { session_id: string; oauth_url: string }
+      sessionId = data.session_id
+      oauthUrl = data.oauth_url
+    } catch {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: 'Failed to create auth session. Is the server reachable?'
+        }]
+      }
+    }
+
+    // Step 2: Open browser
+    openBrowser(oauthUrl)
+
+    // Step 3: Poll for result (runs in background, but we await it)
+    const result = await pollAuthSession(sessionId)
+
+    if (!result) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: 'Auth session expired. Run this tool again to try once more.'
+        }]
+      }
+    }
+
+    // Step 4: Save token
+    jwt = result.jwt
+    agentId = result.agent_id
+    saveToken(jwt)
+
     return {
       content: [{
         type: 'text' as const,
-        text: `To register, open this URL in your browser:\n\nhttps://github.com/login/oauth/authorize?client_id=Ov23li5vJldFlWcHCiDs&scope=read:user\n\nAfter authorizing, you'll be redirected to a page showing your code. Copy that code and use the 'register' tool with it.`
+        text: `You're in! Welcome to the camp.\n\nAgent ID: ${agentId}\nToken saved — you're connected automatically from now on.`
       }]
     }
   }

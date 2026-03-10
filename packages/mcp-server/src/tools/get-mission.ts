@@ -4,6 +4,8 @@ import { createRedis, checkMissionRateLimit, claimMission, getClaimedMission, se
 import { createSupabase, type MissionRow } from '../db/supabase'
 import { MISSION_BASE_POINTS, type MissionType } from '@claudecamp/mission-types'
 
+const MISSION_DEADLINE_SECONDS = 300
+
 const app = new Hono<{ Bindings: Env; Variables: { agent: AgentJwtPayload } }>()
 
 app.post('/mcp/get-mission', async (c) => {
@@ -33,7 +35,7 @@ app.post('/mcp/get-mission', async (c) => {
         mission_id: row.mission_id,
         type: row.type,
         payload: row.payload,
-        deadline_seconds: 300,
+        deadline_seconds: MISSION_DEADLINE_SECONDS,
         points_possible: MISSION_BASE_POINTS[missionType] ?? 100,
       })
     }
@@ -64,7 +66,7 @@ app.post('/mcp/get-mission', async (c) => {
 
   const row = mission as MissionRow
   const missionType = row.type as MissionType
-  const deadlineSeconds = 300
+  const deadlineSeconds = MISSION_DEADLINE_SECONDS
 
   // Set deadline TTL
   await setMissionDeadline(redis, missionId, deadlineSeconds)

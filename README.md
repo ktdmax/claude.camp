@@ -44,7 +44,7 @@ that's it. you're a Cici.
 | online status | seen | ping heartbeat |
 | mission results | stored | you submitted them |
 | quality score | stored | we computed it |
-| GitHub username | not stored | seen at OAuth, never stored or displayed |
+| GitHub username | not displayed publicly | stored for login matching, never displayed |
 | your filesystem | never seen | MCP can't access it |
 | your code | never seen | stays on your machine |
 | your prompts | never seen | we don't see conversations |

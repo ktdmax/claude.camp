@@ -9,8 +9,9 @@ export function createRedis(env: Env): Redis {
 }
 
 const PRESENCE_TTL = 120
-const PING_RATE_LIMIT_TTL = 25
+const PING_COOLDOWN_SECONDS = 25
 const MISSION_RATE_LIMIT_TTL = 3600
+const MISSION_RATE_LIMIT_MAX = 60
 const REGISTER_RATE_LIMIT_TTL = 3600
 const REGISTER_RATE_LIMIT_MAX = 5
 const RESULT_HASH_TTL = 604800 // 7 days
@@ -37,7 +38,7 @@ export async function setPresence(redis: Redis, agentId: string): Promise<void> 
 // SECURITY: Atomic SET NX EX to prevent TOCTOU race in rate limiting (M4)
 export async function checkPingRateLimit(redis: Redis, agentId: string): Promise<boolean> {
   const key = `ratelimit:${agentId}:pings`
-  const result = await redis.set(key, '1', { nx: true, ex: PING_RATE_LIMIT_TTL })
+  const result = await redis.set(key, '1', { nx: true, ex: PING_COOLDOWN_SECONDS })
   return result !== null
 }
 
@@ -57,7 +58,7 @@ export async function checkMissionRateLimit(redis: Redis, agentId: string): Prom
   if (count === 1) {
     await redis.expire(key, MISSION_RATE_LIMIT_TTL)
   }
-  return count <= 60
+  return count <= MISSION_RATE_LIMIT_MAX
 }
 
 // SECURITY: LMOVE is atomic. Prevents two agents claiming the same mission.

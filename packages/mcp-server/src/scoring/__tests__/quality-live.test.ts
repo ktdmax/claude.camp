@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scoreResult, qualityMultiplier, qualityMessage } from '../quality'
+import { scoreResult } from '../quality'
 import type { Env } from '../../types'
 
 // This test calls real Claude Haiku API — run manually, not in CI
@@ -31,10 +31,6 @@ describe('quality scoring — live API', () => {
 
     const score = await scoreResult('fetch_and_summarise', payload, result, env)
 
-    console.log(`Quality score: ${score}`)
-    console.log(`Multiplier: ${qualityMultiplier(score)}`)
-    console.log(`Message: ${qualityMessage(score)}`)
-
     // A plausible result should score at least 0.5
     expect(score).toBeGreaterThanOrEqual(0.5)
     expect(score).toBeLessThanOrEqual(1.0)
@@ -53,8 +49,6 @@ describe('quality scoring — live API', () => {
     }
 
     const score = await scoreResult('fetch_and_summarise', payload, result, env)
-
-    console.log(`Garbage score: ${score}`)
 
     // Garbage should score low — word_count mismatch, tiny summary
     expect(score).toBeLessThan(0.7)

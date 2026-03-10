@@ -206,8 +206,8 @@ export function getPhrase(seed: number): string {
   return `${CURRENTLY[ci]} everything ${SINCE[si]}.`
 }
 
-// Total available phrases
-export const TOTAL_PHRASES = DIRECT.length
+// Total available phrases (used internally for modular indexing)
+const TOTAL_PHRASES = DIRECT.length
   + TEMPLATE_VERBS.length * TEMPLATE_OBJECTS.length
   + CURRENTLY.length * TEMPLATE_OBJECTS.length
   + CURRENTLY.length * SINCE.length

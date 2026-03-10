@@ -3,19 +3,22 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { MCP_URL } from '@/lib/config'
 
+// Background color
 const BG = '#0D0D1A'
 
-// === FIRE SPRITE (bigger: FS=5) ===
+// Fire sprite pixel size
 const FS = 5
 const FIRE_F: number[][][] = [
   [[0,0,0,0,0,5,0,0,0,0,0],[0,0,0,0,5,4,0,0,0,0,0],[0,0,0,0,4,4,5,0,0,0,0],[0,0,0,4,4,5,4,0,0,0,0],[0,0,0,4,3,4,4,4,0,0,0],[0,0,4,3,3,3,4,4,0,0,0],[0,0,3,3,3,3,3,3,0,0,0],[0,3,3,2,3,3,2,3,3,0,0],[0,3,2,2,2,2,2,2,3,0,0],[0,2,2,1,2,2,1,2,2,0,0],[0,2,1,1,1,1,1,1,2,0,0],[0,0,1,1,1,1,1,1,0,0,0],[0,6,6,6,6,6,6,6,6,0,0],[6,6,6,6,6,6,6,6,6,6,0]],
   [[0,0,0,0,0,0,5,0,0,0,0],[0,0,0,0,0,5,4,0,0,0,0],[0,0,0,0,4,5,4,0,0,0,0],[0,0,0,0,4,4,5,4,0,0,0],[0,0,0,4,4,3,4,4,0,0,0],[0,0,3,4,3,3,3,4,0,0,0],[0,0,3,3,3,3,3,3,0,0,0],[0,3,3,3,2,3,3,2,3,0,0],[0,3,2,2,2,2,2,2,3,0,0],[0,2,2,1,2,2,1,2,2,0,0],[0,2,1,1,1,1,1,1,2,0,0],[0,0,1,1,1,1,1,1,0,0,0],[0,6,6,6,6,6,6,6,6,0,0],[6,6,6,6,6,6,6,6,6,6,0]],
   [[0,0,0,0,5,0,0,0,0,0,0],[0,0,0,5,4,5,0,0,0,0,0],[0,0,0,4,5,4,0,0,0,0,0],[0,0,0,4,4,4,4,0,0,0,0],[0,0,4,3,4,4,3,4,0,0,0],[0,0,4,3,3,3,3,4,0,0,0],[0,0,3,3,3,3,3,3,0,0,0],[0,3,2,3,3,2,3,3,3,0,0],[0,3,2,2,2,2,2,2,3,0,0],[0,2,1,2,2,2,2,1,2,0,0],[0,2,1,1,1,1,1,1,2,0,0],[0,0,1,1,1,1,1,1,0,0,0],[0,6,6,6,6,6,6,6,6,0,0],[6,6,6,6,6,6,6,6,6,6,0]],
 ]
+// Fire pixel color palette
 const FC: Record<number,string> = {1:'#6B1010',2:'#C83218',3:'#E8572A',4:'#FF9933',5:'#FFD466',6:'#3D2817'}
 
 // === SITTING CICI (front-view, proper proportions: wider than tall) ===
 // 11 wide × 11 tall at CS=4 — the REAL Cici shape
+// Cici sprite pixel size
 const CS = 4
 
 // Full Cici sitting sprite: ears, wide body, vertical eye slots, arm stump, 4 legs
@@ -142,14 +145,15 @@ const CLIPPY: number[][] = [[0,1,0],[1,0,1],[1,0,1],[0,1,0],[0,1,0],[1,0,0],[1,0
 // === SPARKS (fewer, ambient) ===
 type Spark = { x:number;y:number;vx:number;vy:number;life:number;max:number;size:number;hue:number }
 function mkSpark(cx: number, cy: number): Spark {
-  const a = -Math.PI/2 + (Math.random()-0.5)*1.4, sp = 0.2+Math.random()*0.6, ml = 80+Math.random()*160
-  return { x:cx+(Math.random()-0.5)*16, y:cy-8+Math.random()*4, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:Math.random()*ml, max:ml, size:Math.random()>0.8?2:1, hue:Math.floor(Math.random()*3) }
+  const angle = -Math.PI/2 + (Math.random()-0.5)*1.4, speed = 0.2+Math.random()*0.6, maxLife = 80+Math.random()*160
+  return { x:cx+(Math.random()-0.5)*16, y:cy-8+Math.random()*4, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, life:Math.random()*maxLife, max:maxLife, size:Math.random()>0.8?2:1, hue:Math.floor(Math.random()*3) }
 }
 
 // === PIXEL STARS ===
 type Star = { x:number;y:number;s:number;sp:number;ph:number }
 function mkStars(w: number, h: number): Star[] {
   let seed = 42
+  // Seeded PRNG (linear congruential) for deterministic star placement
   const r = () => { seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff }
   return Array.from({length:50}, () => ({
     x: Math.floor(r()*w/2)*2, y: Math.floor(r()*h*0.5/2)*2,

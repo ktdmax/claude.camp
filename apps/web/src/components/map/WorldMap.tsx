@@ -673,8 +673,6 @@ export function WorldMap() {
       }
     }
 
-    // (portals removed — cicis fall off platform edges naturally)
-
     // === FIRES (slower animation, per-fire offset, sparks) ===
     for (let fi = 0; fi < lv.fires.length; fi++) {
       const fire = lv.fires[fi]!

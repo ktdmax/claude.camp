@@ -1,3 +1,4 @@
+// Reserved for future agent/mission detail pages
 export interface Agent {
   agent_id: string
   github_username: string

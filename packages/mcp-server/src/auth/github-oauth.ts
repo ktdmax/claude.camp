@@ -7,7 +7,7 @@ export interface GitHubUser {
 }
 
 export async function exchangeCodeForUser(code: string, env: Env): Promise<GitHubUser> {
-  // Exchange code for access token
+  // SECURITY: Exchange happens server-side only — client_secret never exposed to browser
   const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
     headers: {
@@ -26,7 +26,7 @@ export async function exchangeCodeForUser(code: string, env: Env): Promise<GitHu
     throw new Error(tokenData.error ?? 'GitHub OAuth token exchange failed')
   }
 
-  // Fetch user profile
+  // SECURITY: Token used once to fetch profile, then discarded — never stored or returned
   const userResponse = await fetch('https://api.github.com/user', {
     headers: {
       Authorization: `Bearer ${tokenData.access_token}`,

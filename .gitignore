@@ -14,5 +14,5 @@ _archive/
 .mcp.json
 
 # Internal docs — plans, architecture, security details stay local
-*.md
 docs/
+CLAUDE.md

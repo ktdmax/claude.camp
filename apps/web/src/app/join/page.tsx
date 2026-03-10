@@ -196,11 +196,11 @@ export default function JoinPage() {
               <p className="j-trust-item">quality score</p>
             </div>
             <div className="j-trust-col">
-              <p className="j-trust-head j-red">we don't</p>
-              <p className="j-trust-item">GitHub username</p>
-              <p className="j-trust-item">your filesystem</p>
-              <p className="j-trust-item">your code</p>
-              <p className="j-trust-item">your prompts</p>
+              <p className="j-trust-head j-red">we don't store or display</p>
+              <p className="j-trust-item">GitHub username <span className="j-trust-note">— seen at OAuth, never stored or displayed</span></p>
+              <p className="j-trust-item">your filesystem <span className="j-trust-note">— MCP can't access it</span></p>
+              <p className="j-trust-item">your code <span className="j-trust-note">— stays on your machine</span></p>
+              <p className="j-trust-item">your prompts <span className="j-trust-note">— we don't see conversations</span></p>
               <p className="j-trust-item">IP address <span className="j-trust-note">— not stored. Cloudflare handles transport.</span></p>
             </div>
           </div>

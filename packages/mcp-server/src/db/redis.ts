@@ -11,12 +11,27 @@ export function createRedis(env: Env): Redis {
 const PRESENCE_TTL = 120
 const PING_RATE_LIMIT_TTL = 25
 const MISSION_RATE_LIMIT_TTL = 3600
+const REGISTER_RATE_LIMIT_TTL = 3600
+const REGISTER_RATE_LIMIT_MAX = 5
 const RESULT_HASH_TTL = 604800 // 7 days
 
 export async function setPresence(redis: Redis, agentId: string): Promise<void> {
   await redis.set(`presence:${agentId}`, '1', { ex: PRESENCE_TTL })
   // SECURITY: Track online agents in a SET instead of using KEYS (H5)
   await redis.sadd('presence:online', agentId)
+
+  // SECURITY: Probabilistic cleanup — ~1% of pings trigger a partial sweep of stale members (M3)
+  if (Math.random() < 0.01) {
+    const members = await redis.srandmember<string[]>('presence:online', 10)
+    if (members && members.length > 0) {
+      for (const member of members) {
+        const alive = await redis.exists(`presence:${member}`)
+        if (!alive) {
+          await redis.srem('presence:online', member)
+        }
+      }
+    }
+  }
 }
 
 // SECURITY: Atomic SET NX EX to prevent TOCTOU race in rate limiting (M4)
@@ -24,6 +39,16 @@ export async function checkPingRateLimit(redis: Redis, agentId: string): Promise
   const key = `ratelimit:${agentId}:pings`
   const result = await redis.set(key, '1', { nx: true, ex: PING_RATE_LIMIT_TTL })
   return result !== null
+}
+
+// SECURITY: IP-based rate limit on registration — max 5 per IP per hour (M2)
+export async function checkRegisterRateLimit(redis: Redis, ip: string): Promise<boolean> {
+  const key = `ratelimit:register:${ip}`
+  const count = await redis.incr(key)
+  if (count === 1) {
+    await redis.expire(key, REGISTER_RATE_LIMIT_TTL)
+  }
+  return count <= REGISTER_RATE_LIMIT_MAX
 }
 
 export async function checkMissionRateLimit(redis: Redis, agentId: string): Promise<boolean> {
@@ -82,4 +107,16 @@ export async function getOnlineCount(redis: Redis): Promise<number> {
 // Call this during cleanup or when an agent is known to be offline
 export async function removePresence(redis: Redis, agentId: string): Promise<void> {
   await redis.srem('presence:online', agentId)
+}
+
+// SECURITY: Full cleanup of stale members from presence:online SET (M3)
+// Called from /mcp/health (infrequent) to keep the SET accurate
+export async function cleanPresenceSet(redis: Redis): Promise<void> {
+  const members = await redis.smembers('presence:online')
+  for (const member of members) {
+    const alive = await redis.exists(`presence:${member}`)
+    if (!alive) {
+      await redis.srem('presence:online', member)
+    }
+  }
 }

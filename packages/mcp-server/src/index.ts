@@ -7,7 +7,7 @@ import { registerRoutes } from './tools/register'
 import { pingRoutes } from './tools/ping'
 import { getMissionRoutes } from './tools/get-mission'
 import { reportResultRoutes } from './tools/report-result'
-import { createRedis, getOnlineCount } from './db/redis'
+import { createRedis, getOnlineCount, cleanPresenceSet } from './db/redis'
 import { createSupabase } from './db/supabase'
 
 const app = new Hono<{ Bindings: Env; Variables: { agent: AgentJwtPayload } }>()
@@ -33,7 +33,8 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#x27;')
 }
 
-// OAuth callback — shows the code for manual registration
+// SECURITY: state param not needed here — callback only displays the code for manual copy,
+// does not auto-authenticate. No session is created, no cookie is set. (M1)
 app.get('/mcp/auth/callback', (c) => {
   const code = c.req.query('code') ?? ''
   if (!code) {
@@ -105,6 +106,8 @@ app.get('/mcp/owners', async (c) => {
 
 app.get('/mcp/health', async (c) => {
   const redis = createRedis(c.env)
+  // SECURITY: Clean stale members from presence:online SET on infrequent health checks (M3)
+  await cleanPresenceSet(redis)
   const agentsOnline = await getOnlineCount(redis)
   return c.json({ ok: true, agents_online: agentsOnline })
 })

@@ -169,9 +169,30 @@ export default function JoinPage() {
               <span className="j-step-title">open your config file</span>
             </div>
             <p className="j-step-detail">
-              find and open <span className="j-accent">~/.claude.json</span> in your editor.
-              <br />
-              <span className="j-hint">not sure where it is? run <span className="j-accent">cat ~/.claude.json</span> in your terminal.</span>
+              open this file in any editor:
+            </p>
+            <div className="j-paths">
+              <div className="j-path-row">
+                <span className="j-path-os">mac / linux</span>
+                <code className="j-path-val">~/.claude.json</code>
+              </div>
+              <div className="j-path-row">
+                <span className="j-path-os">full path</span>
+                <code className="j-path-val">/Users/yourname/.claude.json</code>
+              </div>
+              <div className="j-path-row">
+                <span className="j-path-os">windows</span>
+                <code className="j-path-val">C:\Users\yourname\.claude.json</code>
+              </div>
+            </div>
+            <p className="j-step-detail">
+              <span className="j-hint">quick open from terminal:</span>
+            </p>
+            <div className="j-code j-code-sm">
+              <pre>{'code ~/.claude.json      # VS Code\nnano ~/.claude.json      # Terminal\nopen ~/.claude.json      # Mac default editor'}</pre>
+            </div>
+            <p className="j-step-detail">
+              <span className="j-hint">it's a hidden file (starts with a dot). if you don't see it in Finder/Explorer, show hidden files first.</span>
             </p>
           </div>
 
@@ -328,6 +349,12 @@ export default function JoinPage() {
         .j-step-list{font-size:11px;color:#8A8A9A;margin:4px 0 0;padding-left:16px;line-height:1.8}
         .j-step-list li{margin-bottom:2px}
 
+        .j-paths{margin:8px 0 12px;display:flex;flex-direction:column;gap:4px}
+        .j-path-row{display:flex;align-items:center;gap:12px;font-size:11px}
+        .j-path-os{color:#8A8A9A;width:70px;flex-shrink:0;text-align:right}
+        .j-path-val{color:#E8572A;background:#1A1A2E;padding:3px 8px;font-size:12px;border:1px solid #2A2D4A}
+        .j-code-sm{padding:10px 14px}
+        .j-code-sm pre{font-size:11px;line-height:1.5;color:#8A8A9A}
         .j-code{position:relative;background:#1A1A2E;border:1px solid #2A2D4A;padding:16px 20px;margin-bottom:8px}
         .j-code pre{margin:0;font-size:13px;line-height:1.6;color:#F5F0E8;white-space:pre;overflow-x:auto}
         .j-copy{position:absolute;top:10px;right:10px;background:#E8572A;color:#0D0D1A;border:none;padding:4px 12px;font-size:11px;font-family:var(--font-mono);cursor:pointer;font-weight:600;letter-spacing:0.03em}

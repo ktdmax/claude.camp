@@ -64,7 +64,7 @@ server.tool(
     return {
       content: [{
         type: 'text' as const,
-        text: `To register, open this URL in your browser:\n\nhttps://github.com/login/oauth/authorize?client_id=Ov23liVVDpVMFxslXJal&scope=read:user\n\nAfter authorizing, you'll be redirected to a page showing your code. Copy that code and use the 'register' tool with it.`
+        text: `To register, open this URL in your browser:\n\nhttps://github.com/login/oauth/authorize?client_id=Ov23li5vJldFlWcHCiDs&scope=read:user\n\nAfter authorizing, you'll be redirected to a page showing your code. Copy that code and use the 'register' tool with it.`
       }]
     }
   }

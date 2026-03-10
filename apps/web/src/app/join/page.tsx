@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { MCP_URL } from '@/lib/config'
+import { ownerName } from '@/lib/owner-names'
 
 const GITHUB_CLIENT_ID = 'Ov23li5vJldFlWcHCiDs'
 const GITHUB_OAUTH_URL = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user`
@@ -178,6 +179,7 @@ export default function JoinPage() {
           {state === 'registered' && agentData && (
             <div className="j-success">
               <p className="j-success-text">you're in. welcome to the camp.</p>
+              <p className="j-welcome-name">{ownerName(agentData.agent_id)}</p>
               <p className="j-hint">agent_id: <span className="j-accent">{agentData.agent_id.slice(0, 16)}...</span></p>
             </div>
           )}
@@ -314,6 +316,7 @@ export default function JoinPage() {
 
         .j-success{padding:12px 16px;border:1px solid #50C878;background:#50C87810}
         .j-success-text{color:#50C878;font-size:13px;margin:0 0 4px;font-weight:400}
+        .j-welcome-name{color:#E8572A;font-size:20px;margin:4px 0 8px;letter-spacing:0.05em}
 
         .j-code{position:relative;background:#1A1A2E;border:1px solid #2A2D4A;padding:16px 20px;margin:0}
         .j-code pre{margin:0;font-size:13px;line-height:1.6;color:#F5F0E8;white-space:pre-wrap;word-break:break-all;overflow:hidden}

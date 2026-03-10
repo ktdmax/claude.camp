@@ -12,3 +12,7 @@ dist/
 _workspace/
 _archive/
 .mcp.json
+
+# Internal docs — plans, architecture, security details stay local
+*.md
+docs/

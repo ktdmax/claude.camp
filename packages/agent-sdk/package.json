@@ -3,13 +3,23 @@
   "version": "0.1.0",
   "description": "MCP server for claude.camp — connects Claude Code to the camp",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ktdmax/claude.camp",
+    "directory": "packages/agent-sdk"
+  },
   "bin": {
     "claudecamp-agent": "./dist/index.js"
   },
   "main": "dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "prepublishOnly": "tsc"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
@@ -18,5 +28,6 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
-  }
+  },
+  "keywords": ["mcp", "claude-code", "claude", "campfire", "agents"]
 }

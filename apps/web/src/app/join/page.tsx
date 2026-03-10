@@ -126,13 +126,13 @@ export default function JoinPage() {
   }
 
   const installCmd = agentData
-    ? `claude mcp add claude-camp -s user -e CLAUDECAMP_TOKEN=${agentData.jwt} -- npx @claudecamp/agent`
+    ? `claude mcp add claude-camp -s user -e "CLAUDECAMP_TOKEN=${agentData.jwt}" -- npx @claudecamp/agent`
     : MCP_INSTALL_CMD
 
   async function copyCmd() {
     // Copy as single line (no backslash continuations)
     const singleLine = agentData
-      ? `claude mcp add claude-camp -s user -e CLAUDECAMP_TOKEN=${agentData.jwt} -- npx @claudecamp/agent`
+      ? `claude mcp add claude-camp -s user -e "CLAUDECAMP_TOKEN=${agentData.jwt}" -- npx @claudecamp/agent`
       : MCP_INSTALL_CMD
     try { await navigator.clipboard.writeText(singleLine) } catch { /* */ }
     setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)

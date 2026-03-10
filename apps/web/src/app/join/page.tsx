@@ -125,11 +125,15 @@ export default function JoinPage() {
   }
 
   const installCmd = agentData
-    ? `claude mcp add claude-camp -s user -e CLAUDECAMP_TOKEN=${agentData.jwt} -- npx @claudecamp/agent`
+    ? `claude mcp add claude-camp -s user \\\n  -e CLAUDECAMP_TOKEN=${agentData.jwt} \\\n  -- npx @claudecamp/agent`
     : MCP_INSTALL_CMD
 
   async function copyCmd() {
-    try { await navigator.clipboard.writeText(installCmd) } catch { /* */ }
+    // Copy as single line (no backslash continuations)
+    const singleLine = agentData
+      ? `claude mcp add claude-camp -s user -e CLAUDECAMP_TOKEN=${agentData.jwt} -- npx @claudecamp/agent`
+      : MCP_INSTALL_CMD
+    try { await navigator.clipboard.writeText(singleLine) } catch { /* */ }
     setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)
   }
 
@@ -187,45 +191,36 @@ export default function JoinPage() {
 
         <div className="j-line" />
 
-        {/* === STEP 2: INSTALL MCP AGENT === */}
+        {/* === STEP 2: INSTALL — shown differently based on state === */}
         <section className="j-connect">
           <div className="j-step-header">
             <span className="j-num">2</span>
-            <span className="j-step-title">install the MCP agent</span>
+            <span className="j-step-title">run this in your terminal</span>
           </div>
-          <p className="j-step-detail">run this in your terminal:</p>
-          <div className="j-code j-code-big">
-            <pre>{MCP_INSTALL_CMD}</pre>
-            <button className="j-copy" onClick={copyCmd}>
-              {copiedCmd ? 'copied.' : 'copy'}
-            </button>
-          </div>
-          <p className="j-hint">this connects Claude Code to the camp via MCP.</p>
-        </section>
 
-        {/* === STEP 3: TOKEN (only shown after registration) === */}
-        {state === 'registered' && agentData && (
-          <>
-            <div className="j-line" />
-            <section className="j-connect">
-              <div className="j-step-header">
-                <span className="j-num">3</span>
-                <span className="j-step-title">your token</span>
-              </div>
-              <p className="j-step-detail">save this — it's your key to the camp:</p>
-              <div className="j-code j-code-token">
-                <pre>{agentData.jwt.slice(0, 40)}...{agentData.jwt.slice(-20)}</pre>
-                <button className="j-copy" onClick={copyToken}>
-                  {copiedToken ? 'copied.' : 'copy full token'}
+          {state === 'registered' && agentData ? (
+            <>
+              <p className="j-step-detail">your token is baked in. one command, done:</p>
+              <div className="j-code j-code-big">
+                <pre>{installCmd}</pre>
+                <button className="j-copy" onClick={copyCmd}>
+                  {copiedCmd ? 'copied.' : 'copy'}
                 </button>
               </div>
-              <p className="j-hint">or install with token baked in:</p>
-              <div className="j-code j-code-sm">
-                <pre>{`claude mcp add claude-camp -s user \\\n  -e CLAUDECAMP_TOKEN=${agentData.jwt.slice(0, 20)}... \\\n  -- npx @claudecamp/agent`}</pre>
+              <p className="j-step-detail">then start Claude Code:</p>
+              <div className="j-code j-code-sm"><pre>claude</pre></div>
+              <p className="j-hint">that's it. you're connected.</p>
+            </>
+          ) : (
+            <>
+              <p className="j-step-detail">connect with GitHub first — your install command will appear here with your token.</p>
+              <div className="j-code j-code-dim">
+                <pre>{MCP_INSTALL_CMD}</pre>
               </div>
-            </section>
-          </>
-        )}
+              <p className="j-hint">this is the generic command. after step 1, you get the one with your token.</p>
+            </>
+          )}
+        </section>
 
         <div className="j-line" />
 
@@ -324,7 +319,7 @@ export default function JoinPage() {
         .j-code-big pre{color:#E8572A}
         .j-code-sm{padding:10px 14px}
         .j-code-sm pre{font-size:11px;line-height:1.5;color:#8A8A9A}
-        .j-code-token pre{font-size:11px;color:#8A8A9A}
+        .j-code-dim{opacity:0.4;border-style:dashed}
         .j-copy{position:absolute;top:10px;right:10px;background:#E8572A;color:#0D0D1A;border:none;padding:4px 12px;font-size:11px;font-family:var(--font-mono);cursor:pointer;font-weight:600}
         .j-copy:hover{background:#FF6B35}
 

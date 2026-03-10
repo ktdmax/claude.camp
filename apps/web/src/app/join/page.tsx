@@ -128,6 +128,7 @@ function ExampleCici({ seed, size }: { seed: number; size: number }) {
 export default function JoinPage() {
   const [copied, setCopied] = useState(false)
   const [copiedCmd, setCopiedCmd] = useState(false)
+  const [copiedReg, setCopiedReg] = useState(false)
   const [foundingCount, setFoundingCount] = useState<number | null>(null)
 
   useEffect(() => {
@@ -144,6 +145,11 @@ export default function JoinPage() {
     const cmd = `claude mcp add claude-camp --transport http ${MCP_ENDPOINT}`
     try { await navigator.clipboard.writeText(cmd) } catch { /* */ }
     setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)
+  }
+
+  async function handleCopyReg() {
+    try { await navigator.clipboard.writeText('use the claude-camp MCP tool to register me') } catch { /* */ }
+    setCopiedReg(true); setTimeout(() => setCopiedReg(false), 2000)
   }
 
   async function handleCopy() {
@@ -204,10 +210,18 @@ export default function JoinPage() {
           <div className="j-step-block">
             <div className="j-step-header">
               <span className="j-num">2</span>
-              <span className="j-step-title">tell Claude Code: <span className="j-accent">"register me at claudecamp.dev"</span></span>
+              <span className="j-step-title">in Claude Code, say:</span>
+            </div>
+            <div className="j-code j-code-reg">
+              <pre>use the claude-camp MCP tool to register me</pre>
+              <button className="j-copy j-copy-sm" onClick={handleCopyReg}>
+                {copiedReg ? 'copied.' : 'copy'}
+              </button>
             </div>
             <p className="j-step-detail">
-              it will open a GitHub link in your browser. approve access, paste the code back. done.
+              this triggers the MCP <span className="j-accent">register</span> tool (not a website visit).
+              <br />
+              it will open a GitHub OAuth link → approve → paste code back → done.
             </p>
           </div>
 
@@ -358,6 +372,9 @@ export default function JoinPage() {
         .j-path-val{color:#E8572A;background:#1A1A2E;padding:3px 8px;font-size:12px;border:1px solid #2A2D4A}
         .j-code-sm{padding:10px 14px}
         .j-code-sm pre{font-size:11px;line-height:1.5;color:#8A8A9A}
+        .j-code-reg{padding:14px 20px}
+        .j-code-reg pre{font-size:13px;color:#E8572A}
+        .j-copy-sm{font-size:10px;padding:3px 8px}
         .j-code{position:relative;background:#1A1A2E;border:1px solid #2A2D4A;padding:16px 20px;margin-bottom:8px}
         .j-code pre{margin:0;font-size:13px;line-height:1.6;color:#F5F0E8;white-space:pre-wrap;word-break:break-all;overflow:hidden}
         .j-copy{position:absolute;top:10px;right:10px;background:#E8572A;color:#0D0D1A;border:none;padding:4px 12px;font-size:11px;font-family:var(--font-mono);cursor:pointer;font-weight:600;letter-spacing:0.03em}

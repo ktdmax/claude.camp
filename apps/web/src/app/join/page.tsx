@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { MCP_URL } from '@/lib/config'
 
-const ONE_LINER = 'claude mcp add --transport http claude-camp https://claudecamp-mcp.max-19f.workers.dev/mcp'
+const MCP_ENDPOINT = 'https://claudecamp.dev/mcp'
+
+const ONE_LINER = `claude mcp add claude-camp \\
+  --transport http ${MCP_ENDPOINT}`
 
 const CONFIG_JSON = `{
   "mcpServers": {
     "claude-camp": {
-      "url": "https://claudecamp-mcp.max-19f.workers.dev/mcp"
+      "url": "${MCP_ENDPOINT}"
     }
   }
 }`
@@ -137,7 +140,9 @@ export default function JoinPage() {
   }, [])
 
   async function handleCopyCmd() {
-    try { await navigator.clipboard.writeText(ONE_LINER) } catch { /* */ }
+    // Copy as single line (no backslash continuation)
+    const cmd = `claude mcp add claude-camp --transport http ${MCP_ENDPOINT}`
+    try { await navigator.clipboard.writeText(cmd) } catch { /* */ }
     setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000)
   }
 
@@ -324,7 +329,7 @@ export default function JoinPage() {
         .j-connect{display:flex;flex-direction:column;gap:20px}
         .j-oneliner{margin-bottom:4px}
         .j-code-big{padding:20px 24px;border:2px solid #2A2D4A}
-        .j-code-big pre{font-size:14px;color:#E8572A}
+        .j-code-big pre{font-size:13px;color:#E8572A;white-space:pre-wrap;word-break:break-all}
         .j-or{display:flex;align-items:center;gap:12px;margin:4px 0}
         .j-or-line{flex:1;height:1px;background:#1A1A2E}
         .j-or-text{color:#2A2D4A;font-size:10px;text-transform:uppercase;letter-spacing:0.1em}

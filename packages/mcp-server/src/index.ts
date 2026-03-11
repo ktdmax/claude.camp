@@ -90,18 +90,20 @@ async function registerAgent(
   return { agent_id: agentId, jwt, rank: 'woodcutter' }
 }
 
-// SECURITY: Create a browser-based auth session. Public endpoint, rate-limited by session TTL. (H6)
+// SECURITY: Create a browser-based auth session. Supports localhost callback for CLI auth.
 app.post('/mcp/auth/session', async (c) => {
   const redis = createRedis(c.env)
+  const body = await c.req.json().catch(() => ({})) as { callback_port?: number }
 
-  // SECURITY: Generate cryptographically random session ID (32 hex chars = 16 bytes entropy)
   const bytes = crypto.getRandomValues(new Uint8Array(16))
   const sessionId = toHex(bytes.buffer)
 
-  // SECURITY: Session expires in 5 minutes — limits window for session fixation attacks
-  await redis.set(`auth:session:${sessionId}`, 'pending', { ex: 300 })
+  // Store session with optional localhost port for direct token delivery
+  const sessionData = body.callback_port
+    ? JSON.stringify({ status: 'pending', port: body.callback_port })
+    : 'pending'
+  await redis.set(`auth:session:${sessionId}`, sessionData, { ex: 300 })
 
-  // SECURITY: redirect_uri must point to our callback, not the website
   const callbackUrl = 'https://claudecamp.dev/mcp/auth/callback'
   const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${c.env.GITHUB_CLIENT_ID}&scope=read:user&state=${sessionId}&redirect_uri=${encodeURIComponent(callbackUrl)}`
 
@@ -151,19 +153,32 @@ app.get('/mcp/auth/callback', async (c) => {
     const redis = createRedis(c.env)
     const sessionValue = await redis.get<string>(`auth:session:${state}`)
 
+    // Parse session — might be plain "pending" or JSON with port
+    let isPending = false
+    let localPort: number | null = null
     if (sessionValue === 'pending') {
+      isPending = true
+    } else {
+      try {
+        const parsed = JSON.parse(sessionValue)
+        if (parsed.status === 'pending') { isPending = true; localPort = parsed.port ?? null }
+      } catch { /* not pending */ }
+    }
+
+    if (isPending) {
       try {
         const githubUser = await exchangeCodeForUser(code, c.env)
         const result = await registerAgent(githubUser, c.env)
 
-        // SECURITY: Store JWT in Redis with 5min TTL — agent polls to retrieve it (H6)
-        await redis.set(
-          `auth:session:${state}`,
-          JSON.stringify({ jwt: result.jwt, agent_id: result.agent_id }),
-          { ex: 300 }
-        )
+        // Clean up session
+        await redis.del(`auth:session:${state}`)
 
-        // Return a styled success page
+        // SECURITY: If agent provided a localhost port, redirect token directly there
+        if (localPort && localPort > 1024 && localPort < 65536) {
+          return c.redirect(`http://127.0.0.1:${localPort}/callback?jwt=${encodeURIComponent(result.jwt)}&agent_id=${encodeURIComponent(result.agent_id)}`)
+        }
+
+        // Fallback: show success page (for polling-based flow)
         return c.html(`<!DOCTYPE html>
 <html lang="en">
 <head>

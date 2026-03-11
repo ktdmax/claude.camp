@@ -7,7 +7,7 @@ import { registerRoutes } from './tools/register'
 import { pingRoutes } from './tools/ping'
 import { getMissionRoutes } from './tools/get-mission'
 import { reportResultRoutes } from './tools/report-result'
-import { createRedis, getOnlineCount, cleanPresenceSet } from './db/redis'
+import { createRedis, getOnlineCount, getOnlineAgents, cleanPresenceSet } from './db/redis'
 import { createSupabase } from './db/supabase'
 import { exchangeCodeForUser } from './auth/github-oauth'
 import { signJwt } from './auth/jwt'
@@ -86,7 +86,7 @@ async function registerAgent(
     if (error) throw new Error('Registration failed')
   }
 
-  const jwt = await signJwt({ agent_id: agentId, github_id: githubUser.github_id }, env)
+  const jwt = await signJwt({ agent_id: agentId, github_id: githubUser.github_id, country: githubUser.location }, env)
   return { agent_id: agentId, jwt, rank: 'woodcutter' }
 }
 
@@ -291,6 +291,35 @@ app.get('/mcp/agents/countries', async (c) => {
   }
 
   return c.json({ countries: counts })
+})
+
+// Public API: real-time online presence for world map and campfire
+app.get('/mcp/agents/online', async (c) => {
+  const redis = createRedis(c.env)
+  const agents = await getOnlineAgents(redis)
+
+  // Aggregate by country for world map
+  const byCountry: Record<string, { count: number; working: number }> = {}
+  for (const a of agents) {
+    if (!a.country) continue
+    const entry = byCountry[a.country] ?? { count: 0, working: 0 }
+    entry.count++
+    if (a.status === 'working') entry.working++
+    byCountry[a.country] = entry
+  }
+
+  return c.json({
+    agents_online: agents.length,
+    countries: byCountry,
+    agents: agents.map(a => ({
+      agent_id: a.agent_id.slice(0, 8), // truncated for privacy
+      country: a.country,
+      status: a.status,
+      last_seen: a.last_seen,
+    })),
+  }, 200, {
+    'Cache-Control': 'public, max-age=10',
+  })
 })
 
 // Public API: owner aggregation (one owner = one GitHub user, multiple Cicis)

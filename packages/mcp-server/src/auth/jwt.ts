@@ -17,7 +17,7 @@ const JwtPayloadSchema = z.object({
 })
 
 export async function signJwt(
-  payload: { agent_id: string; github_id: number },
+  payload: { agent_id: string; github_id: number; country?: string | null },
   env: Env
 ): Promise<string> {
   const privateKey = await importPKCS8(env.JWT_PRIVATE_KEY, ALG)
@@ -27,6 +27,7 @@ export async function signJwt(
     agent_id: payload.agent_id,
     github_id: payload.github_id,
     scope: ['mission', 'ping'],
+    country: payload.country ?? null,
   })
     .setProtectedHeader({ alg: ALG })
     .setIssuedAt()
@@ -53,6 +54,8 @@ export async function verifyJwt(token: string, env: Env): Promise<AgentJwtPayloa
     agent_id: parsed.agent_id,
     github_id: parsed.github_id,
     scope: parsed.scope,
+    // Backward compat: old JWTs without country field default to null
+    country: typeof payload.country === 'string' ? payload.country : null,
     iat: payload.iat as number,
     exp: payload.exp as number,
   }

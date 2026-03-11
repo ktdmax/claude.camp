@@ -52,7 +52,19 @@ const EYE_STYLES: number[][][] = [
   [[0,1,1,3,1,1,1,1,1,1,0],[0,1,1,3,1,1,1,3,1,1,0]],  // wink
 ]
 
-const CAMPER_SEEDS = [42, 137, 256, 404, 1337]
+const DEFAULT_CAMPER_SEEDS = [42, 137, 256, 404, 1337]
+
+// Response shape from /mcp/agents/online
+type OnlineResponse = {
+  agents_online: number
+  countries: Record<string, { count: number; working: number }>
+  agents: Array<{
+    agent_id: string
+    country: string | null
+    status: 'idle' | 'working'
+    last_seen: number
+  }>
+}
 
 function hsl2hex(h: number, s: number, l: number): string {
   const a = s * Math.min(l, 1 - l)
@@ -98,15 +110,29 @@ function buildCamperSprites(seed: number) {
   return { sit, blink, w1, w2 }
 }
 
-function buildCampers(fireCx: number, fireCy: number): Camper[] {
-  const positions = [
-    { x: fireCx - 110, y: fireCy + 8 },
-    { x: fireCx - 58, y: fireCy + 18 },
-    { x: fireCx + 14, y: fireCy + 18 },
-    { x: fireCx + 66, y: fireCy + 8 },
-    { x: fireCx - 24, y: fireCy + 28 },
-  ]
-  return CAMPER_SEEDS.map((seed, i) => {
+// Max campers shown around the fire
+const MAX_CAMPERS = 8
+
+// Generate semicircle positions around the fire for N campers
+function camperPositions(fireCx: number, fireCy: number, count: number): Array<{ x: number; y: number }> {
+  if (count === 0) return []
+  const radius = 80
+  const positions: Array<{ x: number; y: number }> = []
+  // Spread in a semicircle below the fire (from -100deg to +100deg)
+  for (let i = 0; i < count; i++) {
+    const angle = (-100 + (200 / (count + 1)) * (i + 1)) * (Math.PI / 180)
+    positions.push({
+      x: fireCx + Math.cos(angle) * radius - 22,
+      y: fireCy + Math.sin(angle) * (radius * 0.4) + 10,
+    })
+  }
+  return positions
+}
+
+function buildCampers(fireCx: number, fireCy: number, seeds?: number[]): Camper[] {
+  const camperSeeds = seeds && seeds.length > 0 ? seeds.slice(0, MAX_CAMPERS) : DEFAULT_CAMPER_SEEDS
+  const positions = camperPositions(fireCx, fireCy, camperSeeds.length)
+  return camperSeeds.map((seed, i) => {
     const h = (seed * 137 + 42) % 360
     const { sit, blink, w1, w2 } = buildCamperSprites(seed)
     const px = positions[i]!.x
@@ -182,19 +208,65 @@ export function SparkCampfire() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.has('sim')) {
-      setTotal(978)
-      setRooms({'The Main Camp':412,'Europe Lounge':234,'Asia Hub':156,'Americas':98,'Oceania':42,'Africa':36})
-    } else {
-      fetch(`${MCP_URL}/mcp/agents/countries`)
-        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-        .then((d:{countries:Record<string,number>}) => {
-          const t = Object.values(d.countries).reduce((a,b)=>a+b,0)
-          setTotal(t); setRooms(d.countries)
-        })
-        .catch(() => { setTotal(1); setRooms({'Austria':1}) })
+
+    const loadOnline = (data: OnlineResponse) => {
+      setTotal(data.agents_online)
+      // Build country summary for room list from countries map
+      const countryTotals: Record<string, number> = {}
+      for (const [country, info] of Object.entries(data.countries)) {
+        countryTotals[country] = info.count
+      }
+      setRooms(countryTotals)
+      // Rebuild campers with agent seeds from online data
+      const cv = canvasRef.current
+      if (cv) {
+        const onlineSeeds = data.agents
+          .filter(a => (Date.now() / 1000 - a.last_seen) <= 600) // exclude gone
+          .map(a => parseInt(a.agent_id.slice(0, 8), 16) || 42)
+          .slice(0, MAX_CAMPERS)
+        campersRef.current = buildCampers(
+          cv.width / 2,
+          cv.height * 0.62,
+          onlineSeeds.length > 0 ? onlineSeeds : undefined,
+        )
+      }
     }
-  }, [])
+
+    if (params.has('sim')) {
+      loadOnline({
+        agents_online: 978,
+        countries: {
+          'United States': { count: 287, working: 40 },
+          'United Kingdom': { count: 82, working: 12 },
+          'Germany': { count: 68, working: 10 },
+          'Canada': { count: 52, working: 8 },
+          'France': { count: 42, working: 6 },
+          'India': { count: 38, working: 5 },
+        },
+        agents: Array.from({ length: 8 }, (_, i) => ({
+          agent_id: ((i * 1337 + 42) >>> 0).toString(16).padStart(8, '0'),
+          country: ['US', 'UK', 'DE', 'CA', 'FR', 'IN', 'AU', 'JP'][i] ?? 'US',
+          status: (i % 3 === 0 ? 'working' : 'idle') as 'idle' | 'working',
+          last_seen: Date.now() / 1000 - 10,
+        })),
+      })
+      return
+    }
+
+    const fetchOnline = () => {
+      fetch(`${MCP_URL}/mcp/agents/online`)
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+        .then((d: OnlineResponse) => loadOnline(d))
+        .catch(() => {
+          // On error keep current state; if first load show empty
+          if (total === 0) setTotal(0)
+        })
+    }
+
+    fetchOnline()
+    const interval = setInterval(fetchOnline, 15_000)
+    return () => clearInterval(interval)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const animate = useCallback(() => {
     const cv = canvasRef.current; if (!cv) return
@@ -202,8 +274,8 @@ export function SparkCampfire() {
     const w = cv.width, h = cv.height, tick = frameRef.current
     const fireCx = w / 2, fireCy = h * 0.62
 
-    // Init campers on first frame
-    if (campersRef.current.length === 0) campersRef.current = buildCampers(fireCx, fireCy)
+    // Init campers on first frame (fallback if fetch hasn't populated yet)
+    if (campersRef.current.length === 0 && total > 0) campersRef.current = buildCampers(fireCx, fireCy)
 
     ctx.fillStyle = BG; ctx.fillRect(0, 0, w, h)
 
@@ -441,7 +513,9 @@ export function SparkCampfire() {
     const resize = () => {
       cv.width = window.innerWidth; cv.height = window.innerHeight - 40
       starsRef.current = mkStars(cv.width, cv.height)
-      campersRef.current = buildCampers(cv.width / 2, cv.height * 0.62)
+      // Preserve current camper seeds on resize
+      const currentSeeds = campersRef.current.map(c => c.seed)
+      campersRef.current = buildCampers(cv.width / 2, cv.height * 0.62, currentSeeds.length > 0 ? currentSeeds : undefined)
     }
     resize(); window.addEventListener('resize', resize)
     rafRef.current = requestAnimationFrame(animate)

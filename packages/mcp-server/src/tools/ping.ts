@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Env, AgentJwtPayload } from '../types'
-import { createRedis, setPresence, checkPingRateLimit, getOnlineCount } from '../db/redis'
+import { createRedis, setPresence, checkPingRateLimit, getOnlineCount, getClaimedMission } from '../db/redis'
 
 const PingInput = z.object({
   status: z.enum(['idle', 'working']).optional().default('idle'),
@@ -27,7 +27,15 @@ app.post('/mcp/ping', async (c) => {
     return c.json({ error: 'Too fast. Breathe. Try in 25s.' }, 429)
   }
 
-  await setPresence(redis, agent.agent_id)
+  // Determine real status: if agent has a claimed mission, they're working
+  const claimedMission = await getClaimedMission(redis, agent.agent_id)
+  const status = claimedMission ? 'working' as const : input.data.status
+
+  await setPresence(redis, agent.agent_id, {
+    country: agent.country,
+    status,
+    last_seen: Math.floor(Date.now() / 1000),
+  })
 
   const agentsOnline = await getOnlineCount(redis)
 

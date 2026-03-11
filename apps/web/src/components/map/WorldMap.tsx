@@ -353,6 +353,20 @@ const CODE_SEQS: string[][] = [
   ['0b101010','=42'],
 ]
 
+// Response shape from /mcp/agents/online
+type OnlineAgent = {
+  agent_id: string
+  country: string | null
+  status: 'idle' | 'working'
+  last_seen: number
+}
+
+type OnlineResponse = {
+  agents_online: number
+  countries: Record<string, { count: number; working: number }>
+  agents: OnlineAgent[]
+}
+
 type Agent = {
   x: number; y: number; vy: number; platIdx: number
   seed: number; country: string; name: string
@@ -364,6 +378,10 @@ type Agent = {
   jumpY: number // offset for jump
   codeSeq: number // which CODE_SEQS to use
   codeFrame: number // which frame in the sequence
+  // Presence state
+  visualState: 'active' | 'working' | 'fading' | 'gone'
+  opacity: number
+  isWorking: boolean
 }
 
 // === CICI CARD ===
@@ -427,9 +445,22 @@ function CiciCard({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   )
 }
 
+// Compute visual presence state from last_seen timestamp
+function computeVisualState(lastSeen: number, status: 'idle' | 'working'): { visualState: 'active' | 'working' | 'fading' | 'gone'; opacity: number } {
+  const elapsed = Date.now() / 1000 - lastSeen
+  if (elapsed > 600) return { visualState: 'gone', opacity: 0 }
+  if (elapsed > 120) {
+    // Fading: linearly interpolate opacity from 1.0 at 120s to 0.2 at 600s
+    const fadeProgress = (elapsed - 120) / (600 - 120)
+    return { visualState: 'fading', opacity: 1.0 - fadeProgress * 0.8 }
+  }
+  if (status === 'working') return { visualState: 'working', opacity: 1.0 }
+  return { visualState: 'active', opacity: 1.0 }
+}
+
 export function WorldMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [total, setTotal] = useState(0)
+  const [online, setOnline] = useState(0)
   const [tooltip, setTooltip] = useState<{x:number;y:number;name:string;country:string}|null>(null)
   // TODO: agent filter (show mine vs all) — needs auth context
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
@@ -445,52 +476,125 @@ export function WorldMap() {
     { slot: 0, active: false, cooldown: 600, type: '', sprite: [], colors: {}, x: 0, y: 0, speed: 0, dir: 1, moveType: 'linear', scale: 1, life: 0 },
     { slot: 1, active: false, cooldown: 1200, type: '', sprite: [], colors: {}, x: 0, y: 0, speed: 0, dir: -1, moveType: 'linear', scale: 1, life: 0 },
   ])
+  // Keep last successful response for graceful error handling
+  const lastOnlineRef = useRef<OnlineResponse | null>(null)
 
-  const initAgents = useCallback((countries: Record<string,number>, w: number, h: number) => {
-    const totalAll = Object.values(countries).reduce((a, b) => a + b, 0)
+  const initAgents = useCallback((onlineAgents: OnlineAgent[], w: number, h: number) => {
+    // Filter out gone agents (last_seen > 600s)
+    const visible = onlineAgents.filter(a => {
+      const elapsed = Date.now() / 1000 - a.last_seen
+      return elapsed <= 600
+    })
+    const totalVisible = visible.length
     const seed = levelSeedRef.current
     const biome = biomeRef.current
-    const lv = buildLevel(w, h, totalAll, seed, biome); levelRef.current = lv
+    const lv = buildLevel(w, h, totalVisible, seed, biome); levelRef.current = lv
     starsRef.current = buildStars(w, h, seed)
     hillsRef.current = buildHills(w, h * 0.42, seed + 777)
-    const agents: Agent[] = []; let idx = 0
-    // Cap at MAX_AGENTS, sample proportionally
-    const scale = totalAll > MAX_AGENTS ? MAX_AGENTS / totalAll : 1
-    for (const [country, rawCount] of Object.entries(countries)) {
-      const count = Math.max(1, Math.round(rawCount * scale))
-      for (let i = 0; i < count && agents.length < MAX_AGENTS; i++) {
-        const seed = idx * 1337 + i * 7 + country.charCodeAt(0) * 31
-        const platIdx = seed % lv.platforms.length
-        const plat = lv.platforms[platIdx]!
-        agents.push({
-          x: plat.x + 10 + (seed % Math.max(1, Math.floor(plat.w - 30))),
-          y: plat.y, vy: 0, platIdx, seed, country,
-          name: funnyName(seed), colors: ciciColor(seed),
-          sprites: buildCiciSprites(seed),
-          dir: seed % 2 === 0 ? 1 : -1, speed: 0.3 + (seed % 8) * 0.05,
-          state: 'walk', stateTimer: seed % 200,
-          frame: 0, frameTick: seed % 10, blinkTick: seed % 70,
-          jumpY: 0, codeSeq: seed % CODE_SEQS.length, codeFrame: 0,
-        })
-        idx++
-      }
+    const agents: Agent[] = []
+    // Cap at MAX_AGENTS
+    const toRender = visible.slice(0, MAX_AGENTS)
+    for (let idx = 0; idx < toRender.length; idx++) {
+      const oa = toRender[idx]!
+      const country = oa.country ?? 'Unknown'
+      // Derive a stable seed from agent_id (first 8 hex chars)
+      const agentSeed = parseInt(oa.agent_id.slice(0, 8), 16) || (idx * 1337 + country.charCodeAt(0) * 31)
+      const platIdx = agentSeed % lv.platforms.length
+      const plat = lv.platforms[platIdx]!
+      const { visualState, opacity } = computeVisualState(oa.last_seen, oa.status)
+      agents.push({
+        x: plat.x + 10 + (agentSeed % Math.max(1, Math.floor(plat.w - 30))),
+        y: plat.y, vy: 0, platIdx, seed: agentSeed, country,
+        name: funnyName(agentSeed), colors: ciciColor(agentSeed),
+        sprites: buildCiciSprites(agentSeed),
+        dir: agentSeed % 2 === 0 ? 1 : -1, speed: 0.3 + (agentSeed % 8) * 0.05,
+        state: 'walk', stateTimer: agentSeed % 200,
+        frame: 0, frameTick: agentSeed % 10, blinkTick: agentSeed % 70,
+        jumpY: 0, codeSeq: agentSeed % CODE_SEQS.length, codeFrame: 0,
+        visualState, opacity, isWorking: oa.status === 'working',
+      })
     }
     agentsRef.current = agents
   }, [])
 
+  // Update visual states of existing agents from fresh online data (avoids full re-init)
+  const updatePresence = useCallback((onlineAgents: OnlineAgent[]) => {
+    const lookup = new Map<string, OnlineAgent>()
+    for (const oa of onlineAgents) lookup.set(oa.agent_id.slice(0, 8), oa)
+    for (const a of agentsRef.current) {
+      const key = (a.seed >>> 0).toString(16).padStart(8, '0').slice(0, 8)
+      // Try to find by matching seed back to agent_id prefix
+      // Since seed = parseInt(agent_id[0:8], 16), reverse it
+      const hexSeed = (a.seed >>> 0).toString(16)
+      let found: OnlineAgent | undefined
+      for (const oa of onlineAgents) {
+        const oaSeed = parseInt(oa.agent_id.slice(0, 8), 16)
+        if (oaSeed === a.seed) { found = oa; break }
+      }
+      if (found) {
+        const { visualState, opacity } = computeVisualState(found.last_seen, found.status)
+        a.visualState = visualState
+        a.opacity = opacity
+        a.isWorking = found.status === 'working'
+      } else {
+        a.visualState = 'gone'
+        a.opacity = 0
+      }
+    }
+  }, [])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const load = (c: Record<string,number>) => {
-      const raw = Object.values(c).reduce((a, b) => a + b, 0)
-      setTotal(Math.min(raw, MAX_AGENTS))
-      requestAnimationFrame(() => { const cv = canvasRef.current; if (cv) initAgents(c, cv.width, cv.height) })
+    let isFirst = true
+
+    const loadOnline = (data: OnlineResponse) => {
+      lastOnlineRef.current = data
+      setOnline(data.agents_online)
+      if (isFirst) {
+        isFirst = false
+        requestAnimationFrame(() => {
+          const cv = canvasRef.current
+          if (cv) initAgents(data.agents, cv.width, cv.height)
+        })
+      } else {
+        updatePresence(data.agents)
+      }
     }
-    if (params.has('sim')) load(SIM)
-    else fetch(`${MCP_URL}/mcp/agents/countries`)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then((d:{countries:Record<string,number>}) => load(d.countries))
-      .catch(() => load({'Austria':1}))
-  }, [initAgents])
+
+    // Sim mode: build fake online agents from SIM data
+    if (params.has('sim')) {
+      const fakeAgents: OnlineAgent[] = []
+      const now = Date.now() / 1000
+      for (const [country, count] of Object.entries(SIM)) {
+        for (let i = 0; i < count && fakeAgents.length < MAX_AGENTS; i++) {
+          fakeAgents.push({
+            agent_id: ((fakeAgents.length * 1337 + i * 7 + country.charCodeAt(0) * 31) >>> 0).toString(16).padStart(8, '0'),
+            country,
+            status: i % 5 === 0 ? 'working' : 'idle',
+            last_seen: now - (i % 3 === 0 ? 60 : i % 7 === 0 ? 300 : 10),
+          })
+        }
+      }
+      loadOnline({ agents_online: fakeAgents.length, countries: {}, agents: fakeAgents })
+      return
+    }
+
+    const fetchOnline = () => {
+      fetch(`${MCP_URL}/mcp/agents/online`)
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+        .then((d: OnlineResponse) => loadOnline(d))
+        .catch(() => {
+          // On error, keep last known state; if first load, show empty
+          if (isFirst) {
+            loadOnline({ agents_online: 0, countries: {}, agents: [] })
+          }
+        })
+    }
+
+    fetchOnline()
+    const interval = setInterval(fetchOnline, 15_000)
+    return () => clearInterval(interval)
+  }, [initAgents, updatePresence])
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const cv = canvasRef.current; if (!cv) return
@@ -706,6 +810,10 @@ export function WorldMap() {
 
     // === AGENTS ===
     for (const a of agentsRef.current) {
+      // Skip gone agents
+      if (a.visualState === 'gone') continue
+      // Apply opacity for fading agents
+      if (a.opacity < 1.0) ctx.globalAlpha = a.opacity
       a.stateTimer--
       if (a.state === 'fall') {
         a.vy += 0.15; a.y += a.vy; a.x += a.dir * 0.3
@@ -840,6 +948,21 @@ export function WorldMap() {
           ctx.fillRect(ax + di * (CS + 1), Math.floor(sprY) - CS * 2, 2, 2)
         }
       }
+
+      // Working glow: blue tint for agents currently working
+      if (a.isWorking) {
+        const pulseAlpha = 0.12 + Math.sin(tick * 0.08 + a.seed) * 0.06
+        ctx.globalAlpha = pulseAlpha * a.opacity
+        ctx.fillStyle = '#4A9EFF'
+        ctx.fillRect(ax - 2, Math.floor(sprY) - 2, 5 * CS + 4, sprH * CS + 4)
+        // Small blue indicator dot above head
+        ctx.globalAlpha = (0.6 + Math.sin(tick * 0.1 + a.seed) * 0.3) * a.opacity
+        ctx.fillStyle = '#4A9EFF'
+        ctx.fillRect(ax + 2 * CS, Math.floor(sprY) - CS * 3, CS, CS)
+      }
+
+      // Reset alpha after each agent
+      ctx.globalAlpha = 1
     }
 
     frameRef.current++
@@ -896,7 +1019,7 @@ export function WorldMap() {
         }}>
           <span className="wm-tog-on">{biomeName}</span>
         </div>
-        <span className="wm-n">{total} {total === 1 ? 'Cici' : 'Cicis'}</span>
+        <span className="wm-n">{online} {online === 1 ? 'Cici' : 'Cicis'} online</span>
       </div>
       <canvas ref={canvasRef} className="wm-canvas" onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip(null)} onClick={handleClick} />
       {selectedAgent && <CiciCard agent={selectedAgent} onClose={() => setSelectedAgent(null)} />}

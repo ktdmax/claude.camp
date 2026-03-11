@@ -16,8 +16,16 @@ const REGISTER_RATE_LIMIT_TTL = 3600
 const REGISTER_RATE_LIMIT_MAX = 5
 const RESULT_HASH_TTL = 604800 // 7 days
 
-export async function setPresence(redis: Redis, agentId: string): Promise<void> {
+export interface PresenceMeta {
+  country: string | null
+  status: 'idle' | 'working'
+  last_seen: number // Unix epoch seconds
+}
+
+export async function setPresence(redis: Redis, agentId: string, meta: PresenceMeta): Promise<void> {
   await redis.set(`presence:${agentId}`, '1', { ex: PRESENCE_TTL })
+  // Store rich presence metadata with same TTL
+  await redis.set(`presence:meta:${agentId}`, JSON.stringify(meta), { ex: PRESENCE_TTL })
   // SECURITY: Track online agents in a SET instead of using KEYS (H5)
   await redis.sadd('presence:online', agentId)
 
@@ -29,10 +37,60 @@ export async function setPresence(redis: Redis, agentId: string): Promise<void> 
         const alive = await redis.exists(`presence:${member}`)
         if (!alive) {
           await redis.srem('presence:online', member)
+          await redis.del(`presence:meta:${member}`)
         }
       }
     }
   }
+}
+
+export interface OnlineAgent {
+  agent_id: string
+  country: string | null
+  status: 'idle' | 'working'
+  last_seen: number
+}
+
+export async function getOnlineAgents(redis: Redis): Promise<OnlineAgent[]> {
+  const memberIds = await redis.smembers('presence:online')
+  if (memberIds.length === 0) return []
+
+  // Pipeline: fetch all meta keys in one round-trip
+  const pipeline = redis.pipeline()
+  for (const id of memberIds) {
+    pipeline.get(`presence:meta:${id}`)
+  }
+  const results = await pipeline.exec<(string | null)[]>()
+
+  const agents: OnlineAgent[] = []
+  for (let i = 0; i < memberIds.length; i++) {
+    const raw = results[i]
+    if (!raw) continue // stale member, no meta
+
+    // Upstash may auto-deserialize JSON — handle both string and object
+    let meta: PresenceMeta
+    if (typeof raw === 'object') {
+      meta = raw as unknown as PresenceMeta
+    } else {
+      try {
+        meta = JSON.parse(raw) as PresenceMeta
+      } catch {
+        continue
+      }
+    }
+
+    const memberId = memberIds[i]
+    if (!memberId) continue
+
+    agents.push({
+      agent_id: memberId,
+      country: meta.country,
+      status: meta.status,
+      last_seen: meta.last_seen,
+    })
+  }
+
+  return agents
 }
 
 // SECURITY: Atomic SET NX EX to prevent TOCTOU race in rate limiting (M4)
@@ -112,6 +170,7 @@ export async function cleanPresenceSet(redis: Redis): Promise<void> {
     const alive = await redis.exists(`presence:${member}`)
     if (!alive) {
       await redis.srem('presence:online', member)
+      await redis.del(`presence:meta:${member}`)
     }
   }
 }

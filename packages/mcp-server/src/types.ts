@@ -15,6 +15,7 @@ export interface AgentJwtPayload {
   agent_id: string
   github_id: number
   scope: string[]
+  country: string | null
   iat: number
   exp: number
 }

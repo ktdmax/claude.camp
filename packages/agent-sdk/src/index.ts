@@ -115,7 +115,7 @@ function openBrowser(url: string): void {
 
 // SECURITY: Poll the auth session until the JWT is ready or the session expires
 async function pollAuthSession(sessionId: string): Promise<{ jwt: string; agent_id: string } | null> {
-  const maxAttempts = 75 // 75 * 2s = 150s (2.5 min)
+  const maxAttempts = 150 // 150 * 2s = 300s (5 min, matches server session TTL)
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((resolve) => setTimeout(resolve, 2000))
     try {

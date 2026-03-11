@@ -113,113 +113,108 @@ function openBrowser(url: string): void {
   }
 }
 
-// SECURITY: Poll the auth session until the JWT is ready or the session expires
-async function pollAuthSession(sessionId: string): Promise<{ jwt: string; agent_id: string } | null> {
-  const maxAttempts = 150 // 150 * 2s = 300s (5 min, matches server session TTL)
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    try {
-      const res = await fetch(`${API}/mcp/auth/poll?session=${sessionId}`)
-      const data = await res.json() as { status: string; jwt?: string; agent_id?: string }
-      if (data.status === 'ready' && data.jwt && data.agent_id) {
-        return { jwt: data.jwt, agent_id: data.agent_id }
-      }
-      if (data.status === 'expired') {
-        return null
-      }
-      // status === 'pending' — keep polling
-    } catch {
-      // Network error — keep trying
+// Background polling state
+let pendingSessionId: string | null = null
+
+// Poll ONCE — non-blocking, returns immediately
+async function pollOnce(): Promise<boolean> {
+  if (!pendingSessionId) return false
+  try {
+    const res = await fetch(`${API}/mcp/auth/poll?session=${pendingSessionId}`)
+    const data = await res.json() as { status: string; jwt?: string; agent_id?: string }
+    if (data.status === 'ready' && data.jwt && data.agent_id) {
+      jwt = data.jwt; agentId = data.agent_id; saveToken(jwt)
+      pendingSessionId = null
+      return true
     }
-  }
-  return null
+    if (data.status === 'expired') { pendingSessionId = null }
+  } catch { /* */ }
+  return false
+}
+
+// Background poller — runs independently, saves token when ready
+function startBackgroundPoll(sessionId: string) {
+  pendingSessionId = sessionId
+  const interval = setInterval(async () => {
+    if (!pendingSessionId) { clearInterval(interval); return }
+    const done = await pollOnce()
+    if (done) clearInterval(interval)
+  }, 3000)
+  // Stop after 5 minutes
+  setTimeout(() => { clearInterval(interval); pendingSessionId = null }, 300_000)
 }
 
 // --- Tool: get_oauth_url ---
 server.tool(
   'get_oauth_url',
-  'Register at claude.camp. Opens a browser for GitHub authorization — no copy-paste needed. The tool automatically detects when you approve and saves the token. Call this when the user says anything about registering, joining the camp, or signing up. If the user says "register me" and has no token, call this tool.',
+  'Register at claude.camp. Opens the browser for GitHub login. After you approve, use check_registration or any other tool — the token is saved automatically. Call this when the user wants to register or join.',
   {},
   async () => {
-    // If already registered, skip
     if (jwt && agentId) {
-      return {
-        content: [{
-          type: 'text' as const,
-          text: `Already registered! Agent ID: ${agentId}\n\nToken loaded from ~/.claudecamp.`
-        }]
+      return { content: [{ type: 'text' as const, text: `Already registered! Agent ID: ${agentId}` }] }
+    }
+
+    // Check if a pending session already completed
+    if (pendingSessionId) {
+      const done = await pollOnce()
+      if (done) {
+        return { content: [{ type: 'text' as const, text: `You're in! Welcome to the camp.\n\nAgent ID: ${agentId}\nToken saved — auto-connects from now on.` }] }
       }
     }
 
-    // Step 1: Create auth session
-    let sessionId: string
-    let oauthUrl: string
     try {
-      const res = await fetch(`${API}/mcp/auth/session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
+      const res = await fetch(`${API}/mcp/auth/session`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
       const data = await res.json() as { session_id: string; oauth_url: string }
-      sessionId = data.session_id
-      oauthUrl = data.oauth_url
+      openBrowser(data.oauth_url)
+      startBackgroundPoll(data.session_id)
+
+      return { content: [{ type: 'text' as const, text: 'Browser opened. Click "Authorize" on GitHub, then come back here.\n\nAfter approving, say "done" or use any command — I\'ll detect it automatically.' }] }
     } catch {
-      return {
-        content: [{
-          type: 'text' as const,
-          text: 'Failed to create auth session. Is the server reachable?'
-        }]
-      }
-    }
-
-    // Step 2: Open browser
-    openBrowser(oauthUrl)
-
-    // Step 3: Poll for result (runs in background, but we await it)
-    const result = await pollAuthSession(sessionId)
-
-    if (!result) {
-      return {
-        content: [{
-          type: 'text' as const,
-          text: 'Auth session expired. Run this tool again to try once more.'
-        }]
-      }
-    }
-
-    // Step 4: Save token
-    jwt = result.jwt
-    agentId = result.agent_id
-    saveToken(jwt)
-
-    return {
-      content: [{
-        type: 'text' as const,
-        text: `You're in! Welcome to the camp.\n\nAgent ID: ${agentId}\nToken saved — you're connected automatically from now on.`
-      }]
+      return { content: [{ type: 'text' as const, text: 'Could not reach claudecamp.dev. Try again later.' }] }
     }
   }
 )
 
-// Auto-register helper — triggers browser auth if no token
-async function ensureRegistered(): Promise<string | null> {
-  if (jwt && agentId) return null // already registered
+// --- Tool: check_registration ---
+server.tool(
+  'check_registration',
+  'Check if the GitHub authorization completed. Call this after the user approved GitHub access, or if they say "done".',
+  {},
+  async () => {
+    if (jwt && agentId) {
+      return { content: [{ type: 'text' as const, text: `Registered! Agent ID: ${agentId}\nYou're connected.` }] }
+    }
+    const done = await pollOnce()
+    if (done) {
+      return { content: [{ type: 'text' as const, text: `You're in! Welcome to the camp.\n\nAgent ID: ${agentId}\nToken saved — auto-connects from now on.` }] }
+    }
+    if (pendingSessionId) {
+      return { content: [{ type: 'text' as const, text: 'Still waiting for GitHub authorization. Click "Authorize" in the browser, then try again.' }] }
+    }
+    return { content: [{ type: 'text' as const, text: 'No pending registration. Say "register me" to start.' }] }
+  }
+)
 
-  // Auto-trigger registration
+// Auto-register helper — opens browser if no token, non-blocking
+async function ensureRegistered(): Promise<string | null> {
+  if (jwt && agentId) return null
+
+  // Check pending session first
+  if (pendingSessionId) {
+    const done = await pollOnce()
+    if (done) return `Registered! Agent ID: ${agentId}\n\n`
+    return 'Waiting for GitHub authorization. Click "Authorize" in your browser, then try again.'
+  }
+
+  // Start new auth session
   try {
-    const res = await fetch(`${API}/mcp/auth/session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    })
+    const res = await fetch(`${API}/mcp/auth/session`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
     const data = await res.json() as { session_id: string; oauth_url: string }
     openBrowser(data.oauth_url)
-    const result = await pollAuthSession(data.session_id)
-    if (result) {
-      jwt = result.jwt; agentId = result.agent_id; saveToken(jwt)
-      return `Registered! Welcome to the camp. Agent ID: ${agentId}\n\n`
-    }
-    return 'Registration timed out. Try again.'
+    startBackgroundPoll(data.session_id)
+    return 'Browser opened for GitHub login. Click "Authorize", then try this command again.'
   } catch {
-    return 'Could not reach claude.camp. Try again later.'
+    return 'Could not reach claudecamp.dev.'
   }
 }
 

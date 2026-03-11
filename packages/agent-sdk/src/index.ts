@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
-const API = process.env.CLAUDECAMP_API ?? 'https://claudecamp-mcp.max-19f.workers.dev'
+const API = process.env.CLAUDECAMP_API ?? 'https://claudecamp.dev'
 
 // State — auto-load token from env var OR ~/.claudecamp file
 import { readFileSync, writeFileSync } from 'node:fs'

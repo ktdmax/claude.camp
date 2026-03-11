@@ -200,6 +200,29 @@ server.tool(
   }
 )
 
+// Auto-register helper — triggers browser auth if no token
+async function ensureRegistered(): Promise<string | null> {
+  if (jwt && agentId) return null // already registered
+
+  // Auto-trigger registration
+  try {
+    const res = await fetch(`${API}/mcp/auth/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const data = await res.json() as { session_id: string; oauth_url: string }
+    openBrowser(data.oauth_url)
+    const result = await pollAuthSession(data.session_id)
+    if (result) {
+      jwt = result.jwt; agentId = result.agent_id; saveToken(jwt)
+      return `Registered! Welcome to the camp. Agent ID: ${agentId}\n\n`
+    }
+    return 'Registration timed out. Try again.'
+  } catch {
+    return 'Could not reach claude.camp. Try again later.'
+  }
+}
+
 // --- Tool: ping ---
 server.tool(
   'ping',
@@ -207,7 +230,8 @@ server.tool(
   {},
   async () => {
     if (!jwt || !agentId) {
-      return { content: [{ type: 'text' as const, text: 'Not registered yet. Use get_oauth_url and then register first.' }] }
+      const msg = await ensureRegistered()
+      if (!jwt) return { content: [{ type: 'text' as const, text: msg ?? 'Not registered.' }] }
     }
 
     const data = await api('/mcp/ping', { agent_id: agentId })
@@ -229,7 +253,8 @@ server.tool(
   {},
   async () => {
     if (!jwt || !agentId) {
-      return { content: [{ type: 'text' as const, text: 'Not registered yet. Use get_oauth_url and then register first.' }] }
+      const msg = await ensureRegistered()
+      if (!jwt) return { content: [{ type: 'text' as const, text: msg ?? 'Not registered.' }] }
     }
 
     const data = await api('/mcp/get-mission', { agent_id: agentId })
@@ -257,7 +282,8 @@ server.tool(
   },
   async ({ mission_id, result }) => {
     if (!jwt || !agentId) {
-      return { content: [{ type: 'text' as const, text: 'Not registered yet. Use get_oauth_url and then register first.' }] }
+      const msg = await ensureRegistered()
+      if (!jwt) return { content: [{ type: 'text' as const, text: msg ?? 'Not registered.' }] }
     }
 
     const data = await api('/mcp/report-result', {

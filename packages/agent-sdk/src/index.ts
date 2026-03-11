@@ -43,6 +43,16 @@ if (jwt && agentId) {
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
     body: JSON.stringify({ agent_id: agentId }),
   }).catch(() => { /* silent — ping failure is not critical */ })
+
+  // Auto-ping every 45s to stay online (presence TTL is 120s)
+  setInterval(() => {
+    if (!jwt || !agentId) return
+    fetch(`${API}/mcp/ping`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
+      body: JSON.stringify({ agent_id: agentId }),
+    }).catch(() => {})
+  }, 45_000)
 }
 
 async function api(path: string, body?: Record<string, unknown>): Promise<Record<string, unknown>> {

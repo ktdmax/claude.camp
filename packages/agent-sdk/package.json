@@ -1,6 +1,6 @@
 {
   "name": "@claudecamp/agent",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for claude.camp — connects Claude Code to the camp",
   "type": "module",
   "license": "MIT",

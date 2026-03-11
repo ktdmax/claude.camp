@@ -2,6 +2,10 @@ name = "claudecamp-mcp"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
+routes = [
+  { pattern = "claudecamp.dev/mcp/*", zone_name = "claudecamp.dev" }
+]
+
 [vars]
 ENVIRONMENT = "production"
 

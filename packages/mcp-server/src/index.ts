@@ -102,7 +102,7 @@ app.post('/mcp/auth/session', async (c) => {
   await redis.set(`auth:session:${sessionId}`, 'pending', { ex: 300 })
 
   // SECURITY: redirect_uri must point to our callback, not the website
-  const callbackUrl = 'https://claudecamp-mcp.max-19f.workers.dev/mcp/auth/callback'
+  const callbackUrl = 'https://claudecamp.dev/mcp/auth/callback'
   const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${c.env.GITHUB_CLIENT_ID}&scope=read:user&state=${sessionId}&redirect_uri=${encodeURIComponent(callbackUrl)}`
 
   return c.json({ session_id: sessionId, oauth_url: oauthUrl })

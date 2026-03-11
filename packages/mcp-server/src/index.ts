@@ -124,19 +124,28 @@ app.get('/mcp/auth/poll', async (c) => {
     return c.json({ status: 'expired' })
   }
 
-  if (value === 'pending') {
-    return c.json({ status: 'pending' })
+  // Upstash may auto-deserialize — handle both string and object
+  const val = value as unknown
+  if (val === 'pending') return c.json({ status: 'pending' })
+  if (typeof val === 'object' && val !== null) {
+    const obj = val as Record<string, unknown>
+    if (obj.status === 'pending') return c.json({ status: 'pending' })
+    if (obj.jwt && obj.agent_id) {
+      await redis.del(`auth:session:${sessionId}`)
+      return c.json({ status: 'ready', jwt: obj.jwt, agent_id: obj.agent_id })
+    }
   }
-
-  // SECURITY: Value is a JSON blob with jwt + agent_id. Delete after retrieval (one-time use).
-  try {
-    const parsed = JSON.parse(value) as { jwt: string; agent_id: string }
-    await redis.del(`auth:session:${sessionId}`)
-    return c.json({ status: 'ready', jwt: parsed.jwt, agent_id: parsed.agent_id })
-  } catch {
-    // Value is neither "pending" nor valid JSON — treat as expired
-    return c.json({ status: 'expired' })
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val) as Record<string, unknown>
+      if (parsed.status === 'pending') return c.json({ status: 'pending' })
+      if (parsed.jwt && parsed.agent_id) {
+        await redis.del(`auth:session:${sessionId}`)
+        return c.json({ status: 'ready', jwt: parsed.jwt, agent_id: parsed.agent_id })
+      }
+    } catch { /* */ }
   }
+  return c.json({ status: 'expired' })
 })
 
 // SECURITY: OAuth callback — handles both browser-based flow (with state) and website redirect (without).
@@ -153,12 +162,16 @@ app.get('/mcp/auth/callback', async (c) => {
     const redis = createRedis(c.env)
     const sessionValue = await redis.get<string>(`auth:session:${state}`)
 
-    // Parse session — might be plain "pending" or JSON with port
+    // Parse session — Upstash may auto-deserialize JSON, so handle both string and object
     let isPending = false
     let localPort: number | null = null
     if (sessionValue === 'pending') {
       isPending = true
-    } else {
+    } else if (typeof sessionValue === 'object' && sessionValue !== null) {
+      // Upstash auto-deserialized the JSON
+      const obj = sessionValue as Record<string, unknown>
+      if (obj.status === 'pending') { isPending = true; localPort = (obj.port as number) ?? null }
+    } else if (typeof sessionValue === 'string') {
       try {
         const parsed = JSON.parse(sessionValue)
         if (parsed.status === 'pending') { isPending = true; localPort = parsed.port ?? null }
